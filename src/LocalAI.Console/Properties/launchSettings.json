@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "LocalAI.Console": {
+      "commandName": "Project",
+      "workingDirectory": "$(SolutionDir)"
+    }
+  }
+}
