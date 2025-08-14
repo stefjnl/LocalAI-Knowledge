@@ -19,41 +19,69 @@ try
 {
     Console.WriteLine("🚀 Starting knowledge processing pipeline...");
 
-    // 1. Read transcript file
-    var transcriptPath = "data/transcripts/ousterhout-philosophy.txt";
-    if (!File.Exists(transcriptPath))
+    // Check if collection already exists and has data
+    if (await CollectionExists(qdrantUrl, "knowledge"))
     {
-        Console.WriteLine($"❌ Transcript file not found: {transcriptPath}");
-        return;
+        Console.WriteLine("✅ Knowledge base already exists, skipping processing");
+        Console.WriteLine("🔍 Ready for interactive search!");
+        Console.WriteLine("Ask questions about the transcript (or 'quit' to exit):");
+    }
+    else
+    {
+        Console.WriteLine("📚 Processing documents for the first time...");
+
+        // 1. Read transcript file
+        var transcriptPath = "data/transcripts/ousterhout-philosophy.txt";
+        if (!File.Exists(transcriptPath))
+        {
+            Console.WriteLine($"❌ Transcript file not found: {transcriptPath}");
+            return;
+        }
+
+        var content = await File.ReadAllTextAsync(transcriptPath);
+        Console.WriteLine($"📖 Read transcript: {content.Length} characters");
+
+        // 2. Split into chunks (improved sentence-aware chunking)
+        var chunks = SplitIntoChunks(content, 500, 50);
+        Console.WriteLine($"✂️ Split into {chunks.Count} chunks");
+
+        // 3. Generate embeddings for each chunk
+        Console.WriteLine("🧠 Generating embeddings...");
+        var embeddings = new List<(string text, float[] embedding)>();
+
+        foreach (var chunk in chunks)
+        {
+            var embedding = await GetEmbedding(chunk, openAiApiKey);
+            embeddings.Add((chunk, embedding));
+            Console.Write(".");
+        }
+        Console.WriteLine($"\n✅ Generated {embeddings.Count} embeddings");
+
+        // 4. Store in Qdrant
+        Console.WriteLine("💾 Storing in Qdrant...");
+        await StoreInQdrant(embeddings, qdrantUrl);
+
+        Console.WriteLine("\n🔍 Ready for interactive search!");
+        Console.WriteLine("Ask questions about the transcript (or 'quit' to exit):");
     }
 
-    var content = await File.ReadAllTextAsync(transcriptPath);
-    Console.WriteLine($"📖 Read transcript: {content.Length} characters");
-
-    // 2. Split into chunks (simple approach - 500 char chunks with 50 char overlap)
-    var chunks = SplitIntoChunks(content, 500, 50);
-    Console.WriteLine($"✂️ Split into {chunks.Count} chunks");
-
-    // 3. Generate embeddings for each chunk
-    Console.WriteLine("🧠 Generating embeddings...");
-    var embeddings = new List<(string text, float[] embedding)>();
-
-    foreach (var chunk in chunks)
+    while (true)
     {
-        var embedding = await GetEmbedding(chunk, openAiApiKey);
-        embeddings.Add((chunk, embedding));
-        Console.Write(".");
+        Console.Write("\n> ");
+        var userQuery = Console.ReadLine();
+
+        if (string.IsNullOrWhiteSpace(userQuery) || userQuery.ToLower() == "quit")
+            break;
+
+        try
+        {
+            await SearchKnowledge(userQuery, openAiApiKey, qdrantUrl);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Search error: {ex.Message}");
+        }
     }
-    Console.WriteLine($"\n✅ Generated {embeddings.Count} embeddings");
-
-    // 4. Store in Qdrant
-    Console.WriteLine("💾 Storing in Qdrant...");
-    await StoreInQdrant(embeddings, qdrantUrl);
-
-    // 5. Test search
-    Console.WriteLine("\n🔍 Testing search...");
-    var searchQuery = "What does Ousterhout say about AI and software design?";
-    await SearchKnowledge(searchQuery, openAiApiKey, qdrantUrl);
 
 }
 catch (Exception ex)
@@ -68,19 +96,42 @@ Console.ReadKey();
 static List<string> SplitIntoChunks(string text, int chunkSize, int overlap)
 {
     var chunks = new List<string>();
-    var start = 0;
+    var sentences = SplitIntoSentences(text);
+    var currentChunk = "";
 
-    while (start < text.Length)
+    foreach (var sentence in sentences)
     {
-        var end = Math.Min(start + chunkSize, text.Length);
-        var chunk = text.Substring(start, end - start).Trim();
+        var testChunk = string.IsNullOrEmpty(currentChunk) ? sentence : currentChunk + " " + sentence;
 
-        if (!string.IsNullOrWhiteSpace(chunk))
+        if (testChunk.Length <= chunkSize)
         {
-            chunks.Add(chunk);
+            currentChunk = testChunk;
         }
+        else
+        {
+            // Current chunk is full, save it and start new one
+            if (!string.IsNullOrWhiteSpace(currentChunk))
+            {
+                chunks.Add(currentChunk.Trim());
+            }
 
-        start += chunkSize - overlap;
+            // Start new chunk with this sentence
+            currentChunk = sentence;
+
+            // If single sentence is too long, split it carefully
+            if (sentence.Length > chunkSize)
+            {
+                var longSentenceParts = SplitLongSentence(sentence, chunkSize);
+                chunks.AddRange(longSentenceParts.Take(longSentenceParts.Count - 1));
+                currentChunk = longSentenceParts.Last();
+            }
+        }
+    }
+
+    // Add the final chunk
+    if (!string.IsNullOrWhiteSpace(currentChunk))
+    {
+        chunks.Add(currentChunk.Trim());
     }
 
     return chunks;
@@ -89,30 +140,37 @@ static List<string> SplitIntoChunks(string text, int chunkSize, int overlap)
 static async Task<float[]> GetEmbedding(string text, string apiKey)
 {
     using var client = new HttpClient();
-    client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+
+    // Add search_document prefix for storing documents
+    var prefixedText = $"search_document: {text}";
 
     var payload = JsonSerializer.Serialize(new
     {
-        input = text,
-        model = "text-embedding-3-small"
+        input = prefixedText,
+        model = "text-embedding-nomic-embed-text-v2-moe"
     });
 
     var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
-    var response = await client.PostAsync("https://openrouter.ai/api/v1/embeddings", content);
+    var response = await client.PostAsync("http://localhost:1234/v1/embeddings", content);
     var responseContent = await response.Content.ReadAsStringAsync();
-
-    // Debug: Always print the response to see what we're getting
-    Console.WriteLine($"\nOpenRouter Response Status: {response.StatusCode}");
-    Console.WriteLine($"OpenRouter Response Content: {responseContent.Substring(0, Math.Min(500, responseContent.Length))}...");
 
     if (!response.IsSuccessStatusCode)
     {
-        throw new Exception($"OpenRouter API failed: {response.StatusCode} - {responseContent}");
+        Console.WriteLine($"❌ LM Studio API Error: {responseContent}");
+        throw new Exception($"LM Studio API failed: {response.StatusCode}");
     }
 
-    // For now, just return mock data to test the pipeline
-    var random = new Random(text.GetHashCode());
-    return Enumerable.Range(0, 1536).Select(_ => (float)random.NextDouble()).ToArray();
+    try
+    {
+        var result = JsonSerializer.Deserialize<JsonElement>(responseContent);
+        var embeddingArray = result.GetProperty("data")[0].GetProperty("embedding").EnumerateArray();
+        return embeddingArray.Select(x => (float)x.GetDouble()).ToArray();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error parsing response: {responseContent}");
+        throw new Exception($"Failed to parse LM Studio response: {ex.Message}");
+    }
 }
 
 static async Task StoreInQdrant(List<(string text, float[] embedding)> embeddings, string qdrantUrl)
@@ -122,7 +180,7 @@ static async Task StoreInQdrant(List<(string text, float[] embedding)> embedding
     // Create collection first
     var collectionPayload = JsonSerializer.Serialize(new
     {
-        vectors = new { size = 1536, distance = "Cosine" } // text-embedding-3-small is 1536 dimensions
+        vectors = new { size = 768, distance = "Cosine" } // NEW - Nomic embedding size
     });
 
     var createContent = new StringContent(collectionPayload, System.Text.Encoding.UTF8, "application/json");
@@ -146,7 +204,7 @@ static async Task StoreInQdrant(List<(string text, float[] embedding)> embedding
 static async Task SearchKnowledge(string query, string apiKey, string qdrantUrl)
 {
     // Get embedding for search query
-    var queryEmbedding = await GetEmbedding(query, apiKey);
+    var queryEmbedding = await GetEmbedding($"search_query: {query}", apiKey);
 
     // Search in Qdrant
     using var client = new HttpClient();
@@ -161,6 +219,211 @@ static async Task SearchKnowledge(string query, string apiKey, string qdrantUrl)
     var response = await client.PostAsync($"{qdrantUrl}/collections/knowledge/points/search", searchContent);
     var responseContent = await response.Content.ReadAsStringAsync();
 
-    Console.WriteLine($"🎯 Search results for: '{query}'");
-    Console.WriteLine(responseContent);
+    if (!response.IsSuccessStatusCode)
+    {
+        Console.WriteLine($"❌ Search error: {responseContent}");
+        return;
+    }
+
+    // Parse and display results nicely
+    try
+    {
+        var searchResult = JsonSerializer.Deserialize<JsonElement>(responseContent);
+        var results = searchResult.GetProperty("result").EnumerateArray().ToList();
+
+        Console.WriteLine();
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"Found {results.Count} relevant passages for: \"{query}\"");
+        Console.ResetColor();
+        Console.WriteLine();
+
+        for (int i = 0; i < results.Count; i++)
+        {
+            var result = results[i];
+            var score = result.GetProperty("score").GetSingle();
+            var payload = result.GetProperty("payload");
+            var text = payload.GetProperty("text").GetString();
+            var source = payload.GetProperty("source").GetString();
+
+            // Source header with score
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.Write($"📄 {GetSourceDisplayName(source)}");
+
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine($" (Score: {score:F2})");
+            Console.ResetColor();
+
+            // Content with proper formatting
+            var formattedContent = FormatContent(text);
+            Console.WriteLine($"\"{formattedContent}\"");
+
+            if (i < results.Count - 1)
+            {
+                Console.WriteLine();
+            }
+        }
+
+        Console.WriteLine();
+        GenerateFollowUpQuestions(query);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error parsing search results: {ex.Message}");
+        Console.WriteLine($"Raw response: {responseContent}");
+    }
+}
+
+static string GetSourceDisplayName(string source)
+{
+    // Handle different source types
+    if (source.Contains("ousterhout"))
+    {
+        return "Ousterhout Philosophy Transcript";
+    }
+
+    // Future: handle PDFs and other sources
+    return source;
+}
+
+static string FormatContent(string content)
+{
+    // Clean up content for better readability
+    return content
+        .Replace("\n\n", " ")  // Remove double line breaks
+        .Replace("\n", " ")    // Replace single line breaks with spaces
+        .Trim()
+        .Replace("  ", " ");   // Remove double spaces
+}
+
+static void GenerateFollowUpQuestions(string originalQuery)
+{
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("💡 You might also want to ask:");
+    Console.ResetColor();
+
+    var questions = new List<string>();
+
+    // Simple rule-based follow-up generation
+    if (originalQuery.ToLower().Contains("design"))
+    {
+        questions.Add("What are specific examples of good design?");
+        questions.Add("How do you measure design quality?");
+    }
+    else if (originalQuery.ToLower().Contains("complexity"))
+    {
+        questions.Add("How do you manage complexity in large systems?");
+        questions.Add("What causes unnecessary complexity?");
+    }
+    else if (originalQuery.ToLower().Contains("software"))
+    {
+        questions.Add("What are the key principles of software engineering?");
+        questions.Add("How do you write maintainable code?");
+    }
+    else
+    {
+        // Generic fallbacks
+        questions.Add($"Can you give examples related to this topic?");
+        questions.Add($"What are the main challenges here?");
+    }
+
+    foreach (var question in questions.Take(2))
+    {
+        Console.ForegroundColor = ConsoleColor.DarkYellow;
+        Console.WriteLine($"   • {question}");
+    }
+
+    Console.ResetColor();
+    Console.WriteLine();
+}
+
+static async Task<bool> CollectionExists(string qdrantUrl, string collectionName)
+{
+    using var client = new HttpClient();
+
+    try
+    {
+        var response = await client.GetAsync($"{qdrantUrl}/collections/{collectionName}");
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<JsonElement>(responseContent);
+
+            // Check if collection has any points
+            var pointsCount = result.GetProperty("result").GetProperty("points_count").GetInt32();
+            return pointsCount > 0;
+        }
+
+        return false;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+static List<string> SplitIntoSentences(string text)
+{
+    // Simple sentence splitting - can be improved with more sophisticated logic
+    var sentences = new List<string>();
+    var current = "";
+
+    for (int i = 0; i < text.Length; i++)
+    {
+        current += text[i];
+
+        // Check for sentence endings
+        if ((text[i] == '.' || text[i] == '!' || text[i] == '?') &&
+            i + 1 < text.Length &&
+            char.IsWhiteSpace(text[i + 1]))
+        {
+            sentences.Add(current.Trim());
+            current = "";
+        }
+    }
+
+    // Add any remaining text
+    if (!string.IsNullOrWhiteSpace(current))
+    {
+        sentences.Add(current.Trim());
+    }
+
+    return sentences.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+}
+
+static List<string> SplitLongSentence(string sentence, int maxLength)
+{
+    var parts = new List<string>();
+    var words = sentence.Split(' ');
+    var currentPart = "";
+
+    foreach (var word in words)
+    {
+        var testPart = string.IsNullOrEmpty(currentPart) ? word : currentPart + " " + word;
+
+        if (testPart.Length <= maxLength)
+        {
+            currentPart = testPart;
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(currentPart))
+            {
+                parts.Add(currentPart + "...");
+                currentPart = "..." + word;
+            }
+            else
+            {
+                // Single word is too long, just add it
+                parts.Add(word);
+            }
+        }
+    }
+
+    if (!string.IsNullOrWhiteSpace(currentPart))
+    {
+        parts.Add(currentPart);
+    }
+
+    return parts;
 }
