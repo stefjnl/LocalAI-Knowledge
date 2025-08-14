@@ -51,6 +51,14 @@
         "net9.0": {
           "targetAlias": "net9.0",
           "dependencies": {
+            "DotNetEnv": {
+              "target": "Package",
+              "version": "[3.1.1, )"
+            },
+            "OpenAI": {
+              "target": "Package",
+              "version": "[2.3.0, )"
+            },
             "Qdrant.Client": {
               "target": "Package",
               "version": "[1.15.0, )"
