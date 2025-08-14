@@ -1,9 +1,8 @@
 ﻿using DotNetEnv;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using LocalAI.Core.Interfaces;
 using LocalAI.Infrastructure.Services;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 // Load environment variables
 Env.Load();
