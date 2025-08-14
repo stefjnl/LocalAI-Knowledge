@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "rLJ4TbEq1X0=",
+  "success": true,
+  "projectFilePath": "C:\\git\\LocalAI-Knowledge\\src\\LocalAI.Api\\LocalAI.Api.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\sjsla\\.nuget\\packages\\microsoft.aspnetcore.openapi\\9.0.8\\microsoft.aspnetcore.openapi.9.0.8.nupkg.sha512",
+    "C:\\Users\\sjsla\\.nuget\\packages\\microsoft.openapi\\1.6.17\\microsoft.openapi.1.6.17.nupkg.sha512"
+  ],
+  "logs": []
+}
