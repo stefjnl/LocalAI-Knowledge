@@ -1,11 +1,9 @@
 # docker-compose.yml - Application services (can be restarted safely)
-version: '3.8'
-
 services:
   localai-api:
     build:
-      context: ./src/LocalAI.Api
-      dockerfile: Dockerfile
+      context: .  # Changed: Use root as context
+      dockerfile: src/LocalAI.Api/Dockerfile  # Changed: Full path to Dockerfile
     container_name: localai-api
     ports:
       - "7190:8080"
@@ -19,11 +17,11 @@ services:
     restart: unless-stopped
     networks:
       - localai-network
-
+      
   localai-web:
     build:
-      context: ./src/LocalAI.Web
-      dockerfile: Dockerfile
+      context: .  # Changed: Use root as context
+      dockerfile: src/LocalAI.Web/Dockerfile  # Changed: Full path to Dockerfile
     container_name: localai-web
     ports:
       - "7001:8080"

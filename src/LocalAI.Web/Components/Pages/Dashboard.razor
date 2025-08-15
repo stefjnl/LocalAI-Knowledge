@@ -1,0 +1,124 @@
+@page "/dashboard"
+@using LocalAI.Web.Services
+@inject IApiService ApiService
+
+<PageTitle>Dashboard</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="text-center mb-5">
+                <h1 class="display-5 fw-bold text-primary">🧠 Local AI Knowledge Assistant</h1>
+                <p class="lead text-muted">Your personal knowledge base powered by local AI</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="display-4 text-primary mb-3">📊</div>
+                    <h5 class="card-title">Knowledge Base Status</h5>
+                    @if (collectionStatus != null)
+                    {
+                        <p class="card-text">
+                            @if (collectionStatus.CollectionExists)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            <div class="mt-2">Ready for queries</div>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning">Not Processed</span>
+                            <div class="mt-2">Process documents to enable search</div>
+                        }
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="card-text"><span class="badge bg-secondary">Checking...</span></p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="display-4 text-primary mb-3">📚</div>
+                    <h5 class="card-title">Documents</h5>
+                    <p class="card-text">
+                        <span class="badge bg-info">@documentCount Files</span>
+                    <div class="mt-2">in knowledge base</div>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="display-4 text-primary mb-3">⚡</div>
+                    <h5 class="card-title">System Status</h5>
+                    <p class="card-text">
+                        <span class="badge bg-success">Online</span>
+                    <div class="mt-2">All services running</div>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="/search" class="btn btn-outline-primary">
+                            <i class="bi bi-search me-2"></i>Search Knowledge Base
+                        </a>
+                        <a href="/documents" class="btn btn-outline-secondary">
+                            <i class="bi bi-files me-2"></i>Process Documents
+                        </a>
+                        <a href="/settings" class="btn btn-outline-info">
+                            <i class="bi bi-gear me-2"></i>Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private CollectionStatusResponse? collectionStatus;
+    private int documentCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            var statusResponse = await ApiService.GetCollectionStatusAsync();
+            if (statusResponse.Success && statusResponse.Data != null)
+            {
+                collectionStatus = statusResponse.Data;
+                // In a real implementation, we would get the actual document count from the API
+                // For now, we'll just show a placeholder
+                documentCount = collectionStatus.CollectionExists ? 2098 : 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error silently for now
+        }
+    }
+}

@@ -1,5 +1,4 @@
 ﻿@page "/search"
-@page "/"
 @using LocalAI.Web.Services
 @using LocalAI.Core.Models
 @using Microsoft.AspNetCore.Components.Web
@@ -20,11 +19,13 @@
 
             @if (!string.IsNullOrEmpty(statusMessage))
             {
-                <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show" role="alert">
+                <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show"
+                    role="alert">
                     <strong>@(collectionExists ? "✅" : "⚠️")</strong> @statusMessage
                     @if (!collectionExists)
                     {
-                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" @onclick="ProcessDocuments" disabled="@isProcessing">
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" @onclick="ProcessDocuments"
+                            disabled="@isProcessing">
                             @if (isProcessing)
                             {
                                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -44,11 +45,10 @@
                     <div class="input-group input-group-lg">
                         <span class="input-group-text bg-light border-end-0">🔍</span>
                         <input type="text" class="form-control border-start-0 ps-0"
-                               placeholder="Ask anything about your knowledge base..."
-                               @bind="searchQuery"
-                               @onkeypress="OnKeyPress"
-                               disabled="@isSearching" />
-                        <button class="btn btn-primary px-4" type="button" @onclick="PerformSearch" disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
+                            placeholder="Ask anything about your knowledge base..." @bind="searchQuery"
+                            @onkeypress="OnKeyPress" disabled="@isSearching" />
+                        <button class="btn btn-primary px-4" type="button" @onclick="PerformSearch"
+                            disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
                             @if (isSearching)
                             {
                                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -90,6 +90,18 @@
                                 {
                                     <p class="text-muted mb-0">No response generated.</p>
                                 }
+                                <div class="mt-3">
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="ToggleResponseFormat">
+                                        @if (isResponseExpanded)
+                                        {
+                                            <span>📋 Collapse Response</span>
+                                        }
+                                        else
+                                        {
+                                            <span>📋 Expand Response</span>
+                                        }
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -115,9 +127,27 @@
                                                     {
                                                         <small class="text-muted d-block mb-2">@source.PageInfo</small>
                                                     }
-                                                    <p class="card-text small text-muted">
-                                                        @TruncateContent(source.Content, 150)
+<p class="card-text small text-muted">
+                                                        @if (IsSourceExpanded(source))
+                                                        {
+                                                            @source.Content
+                                                        }
+                                                        else
+                                                        {
+                                                            @TruncateContent(source.Content, 150)
+                                                        }
                                                     </p>
+                                                    <button class="btn btn-sm btn-outline-secondary mt-2"
+                                                        @onclick="() => ToggleSourceExpansion(source)">
+                                                        @if (IsSourceExpanded(source))
+                                                        {
+                                                            <span>⬆️ Show Less</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>⬇️ Show More</span>
+                                                        }
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
@@ -141,6 +171,8 @@
     private string statusMessage = "";
     private string searchError = "";
     private SearchResponse? searchResponse;
+    private bool isResponseExpanded = false;
+    private HashSet<SearchResult> expandedSources = new HashSet<SearchResult>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -156,8 +188,8 @@
             {
                 collectionExists = response.Data.CollectionExists;
                 statusMessage = collectionExists
-                    ? "Knowledge base is ready! You can start searching your documents."
-                    : "Knowledge base not found. Process your documents first to enable search.";
+                ? "Knowledge base is ready! You can start searching your documents."
+                : "Knowledge base not found. Process your documents first to enable search.";
             }
             else
             {
@@ -254,5 +286,27 @@
             return content;
 
         return content.Substring(0, maxLength) + "...";
+    }
+
+    private void ToggleResponseFormat()
+    {
+        isResponseExpanded = !isResponseExpanded;
+    }
+
+    private void ToggleSourceExpansion(SearchResult source)
+    {
+        if (expandedSources.Contains(source))
+        {
+            expandedSources.Remove(source);
+        }
+        else
+        {
+            expandedSources.Add(source);
+        }
+    }
+
+    private bool IsSourceExpanded(SearchResult source)
+    {
+        return expandedSources.Contains(source);
     }
 }

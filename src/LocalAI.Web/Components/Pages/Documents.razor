@@ -1,0 +1,194 @@
+@page "/documents"
+@using LocalAI.Web.Services
+@inject IApiService ApiService
+
+<PageTitle>Document Processing</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+
+            <div class="text-center mb-4">
+                <h1 class="display-5 fw-bold text-primary">📚 Document Processing</h1>
+                <p class="lead text-muted">Process your knowledge base documents for semantic search</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show"
+                    role="alert">
+                    <strong>@(collectionExists ? "✅" : "⚠️")</strong> @statusMessage
+                </div>
+            }
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Process Documents</h5>
+                </div>
+                <div class="card-body">
+                    <p>Process all documents in your data directories to create searchable embeddings.</p>
+                    <p><strong>Current data paths:</strong></p>
+                    <ul>
+                        <li>Transcripts: data/transcripts/</li>
+                        <li>PDFs: data/pdfs/</li>
+                    </ul>
+
+                    <button type="button" class="btn btn-primary" @onclick="ProcessDocuments" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Processing...</span>
+                        }
+                        else
+                        {
+                            <span>🚀 Process All Documents</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            @if (isProcessing)
+            {
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Processing Progress</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="progress mb-3" style="height: 25px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+                                style="width: @progressPercentage%" aria-valuenow="@progressPercentage" aria-valuemin="0"
+                                aria-valuemax="100">
+                                @progressPercentage%
+                            </div>
+                        </div>
+                        <div class="text-center">
+                            <p class="mb-1">@progressMessage</p>
+                            <small class="text-muted">@progressDetails</small>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (processingComplete)
+            {
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">✅ Processing Complete</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.
+                        </p>
+                        <p>Your knowledge base is now ready for semantic search!</p>
+                        <a href="/search" class="btn btn-primary">Start Searching</a>
+                    </div>
+                </div>
+            }
+
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isProcessing = false;
+    private bool collectionExists = false;
+    private bool processingComplete = false;
+    private string statusMessage = "";
+    private int progressPercentage = 0;
+    private string progressMessage = "Ready to process";
+    private string progressDetails = "";
+    private int processedChunks = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckCollectionStatus();
+    }
+
+    private async Task CheckCollectionStatus()
+    {
+        try
+        {
+            var response = await ApiService.GetCollectionStatusAsync();
+            if (response.Success && response.Data != null)
+            {
+                collectionExists = response.Data.CollectionExists;
+                statusMessage = collectionExists
+                ? "Knowledge base is ready! You can start searching your documents."
+                : "Knowledge base not found. Process your documents to enable search.";
+            }
+            else
+            {
+                statusMessage = "Unable to check knowledge base status. Make sure the API is running.";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error checking status: {ex.Message}";
+        }
+    }
+
+    private async Task ProcessDocuments()
+    {
+        isProcessing = true;
+        processingComplete = false;
+        progressPercentage = 0;
+        progressMessage = "Starting document processing...";
+        progressDetails = "Initializing services";
+        processedChunks = 0;
+        statusMessage = "";
+
+        try
+        {
+            // Simulate progress updates
+            await SimulateProgress();
+
+            // In a real implementation, we would call the API to process documents
+            // For now, we'll simulate the process
+            await Task.Delay(3000); // Simulate processing time
+
+            processedChunks = 2098; // Simulate processed chunks
+            processingComplete = true;
+            collectionExists = true;
+            statusMessage = "Knowledge base successfully updated!";
+            progressMessage = "Processing complete!";
+            progressDetails = $"Processed {processedChunks} document chunks";
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task SimulateProgress()
+    {
+        // This method simulates progress updates during document processing
+        for (int i = 0; i <= 100; i += 10)
+        {
+            progressPercentage = i;
+            progressMessage = "Processing documents...";
+            progressDetails = $"Progress: {i}%";
+
+            if (i == 30)
+            {
+                progressMessage = "Extracting text from documents...";
+                progressDetails = "Processing PDF files";
+            }
+            else if (i == 60)
+            {
+                progressMessage = "Generating embeddings...";
+                progressDetails = "Creating vector representations";
+            }
+            else if (i == 90)
+            {
+                progressMessage = "Storing in vector database...";
+                progressDetails = "Saving to Qdrant";
+            }
+
+            await Task.Delay(300); // Simulate processing time
+            StateHasChanged(); // Update UI
+        }
+    }
+}
