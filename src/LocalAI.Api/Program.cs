@@ -77,17 +77,87 @@ app.MapGet("/api/documents/processed", (IDocumentProcessor processor) =>
 {
     try
     {
-        var processedFiles = ((DocumentProcessor)processor).GetProcessedFiles();
+        var summary = ((DocumentProcessor)processor).GetProcessingSummary();
         return Results.Ok(new
         {
             Success = true,
-            ProcessedFiles = processedFiles,
-            TotalCount = processedFiles.Count
+            ProcessedFiles = summary.AllDocuments.Select(d => new
+            {
+                FileName = d.FileName,
+                DocumentType = d.DocumentType,
+                ChunksProcessed = d.ChunksProcessed,
+                ProcessingDuration = d.FormattedDuration,
+                ProcessedAt = d.FormattedProcessedAt,
+                Success = d.Success,
+                ErrorMessage = d.ErrorMessage
+            }).ToArray(),
+            TotalCount = summary.TotalDocuments,
+            TotalChunks = summary.TotalChunks,
+            SuccessfulDocuments = summary.SuccessfulDocuments,
+            FailedDocuments = summary.FailedDocuments
         });
     }
     catch (Exception ex)
     {
         return Results.Problem($"Error retrieving processed files: {ex.Message}");
+    }
+});
+
+app.MapGet("/api/documents/last-run", (IDocumentProcessor processor) =>
+{
+    try
+    {
+        var lastRunMetadata = ((DocumentProcessor)processor).GetLastRunMetadata();
+        return Results.Ok(new
+        {
+            Success = true,
+            DocumentsProcessed = lastRunMetadata.Count,
+            TotalChunks = lastRunMetadata.Sum(d => d.ChunksProcessed),
+            Documents = lastRunMetadata.Select(d => new
+            {
+                FileName = d.FileName,
+                DocumentType = d.DocumentType,
+                ChunksProcessed = d.ChunksProcessed,
+                ProcessingDuration = d.FormattedDuration,
+                ProcessedAt = d.FormattedProcessedAt,
+                Success = d.Success,
+                ErrorMessage = d.ErrorMessage
+            }).ToArray()
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error retrieving last run data: {ex.Message}");
+    }
+});
+
+app.MapGet("/api/documents/summary", (IDocumentProcessor processor) =>
+{
+    try
+    {
+        var summary = ((DocumentProcessor)processor).GetProcessingSummary();
+        return Results.Ok(new
+        {
+            Success = true,
+            TotalDocuments = summary.TotalDocuments,
+            TotalChunks = summary.TotalChunks,
+            SuccessfulDocuments = summary.SuccessfulDocuments,
+            FailedDocuments = summary.FailedDocuments,
+            LastRunDocuments = summary.LastRunDocuments,
+            LastRunChunks = summary.LastRunChunks,
+            LastRunDetails = summary.LastRunDetails.Select(d => new
+            {
+                FileName = d.FileName,
+                DocumentType = d.DocumentType,
+                ChunksProcessed = d.ChunksProcessed,
+                ProcessingDuration = d.FormattedDuration,
+                Success = d.Success
+            }).ToArray()
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error retrieving processing summary: {ex.Message}");
     }
 });
 
@@ -156,6 +226,9 @@ app.MapPost("/api/documents/upload", async (HttpRequest request, IDocumentProces
         using var stream = File.Create(filePath);
         await file.CopyToAsync(stream);
 
+        // Time the processing
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
         // Process the uploaded file
         List<DocumentChunk> chunks = new();
         if (documentType == "pdf")
@@ -167,14 +240,32 @@ app.MapPost("/api/documents/upload", async (HttpRequest request, IDocumentProces
             chunks = await processor.ProcessTextFileAsync(filePath);
         }
 
+        stopwatch.Stop();
+
         if (chunks.Count > 0)
         {
             await vectorSearch.StoreDocumentsAsync(chunks);
+
+            // Create processing metadata for tracking
+            var metadata = new ProcessingMetadata
+            {
+                FileName = Path.GetFileName(safeFileName),
+                DocumentType = documentType == "pdf" ? "PDF" : "Transcript",
+                ChunksProcessed = chunks.Count,
+                ProcessingDurationMs = stopwatch.ElapsedMilliseconds,
+                ProcessedAt = DateTime.UtcNow,
+                Success = true
+            };
+
+            // Save the metadata (cast to access enhanced methods)
+            ((DocumentProcessor)processor).SaveFileMetadata(metadata);
+
             return Results.Ok(new
             {
                 Success = true,
                 ChunksProcessed = chunks.Count,
-                Message = $"Successfully processed '{file.FileName}' ({chunks.Count} chunks)"
+                ProcessingDuration = metadata.FormattedDuration,
+                Message = $"Successfully processed '{file.FileName}' ({chunks.Count} chunks in {metadata.FormattedDuration})"
             });
         }
 
@@ -182,6 +273,7 @@ app.MapPost("/api/documents/upload", async (HttpRequest request, IDocumentProces
         {
             Success = false,
             ChunksProcessed = 0,
+            ProcessingDuration = stopwatch.ElapsedMilliseconds < 1000 ? $"{stopwatch.ElapsedMilliseconds}ms" : $"{stopwatch.ElapsedMilliseconds / 1000.0:F1}s",
             Message = $"No content found in '{file.FileName}'"
         });
     }

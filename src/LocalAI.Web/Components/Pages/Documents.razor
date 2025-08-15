@@ -20,7 +20,7 @@
             @if (!string.IsNullOrEmpty(statusMessage))
             {
                 <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show"
-                    role="alert">
+                     role="alert">
                     <strong>@(collectionExists ? "✅" : "⚠️")</strong> @statusMessage
                 </div>
             }
@@ -72,7 +72,7 @@
                     </div>
 
                     <button type="button" class="btn btn-success" @onclick="UploadDocument"
-                        disabled="@(isUploading || selectedFile == null)">
+                            disabled="@(isUploading || selectedFile == null)">
                         @if (isUploading)
                         {
                             <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -86,11 +86,11 @@
                 </div>
             </div>
 
-@if (processedDocuments.Any())
+            @if (currentSessionDocuments.Any())
             {
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">Processed Documents</h5>
+                        <h5 class="mb-0">Current Session - Processed Documents</h5>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -100,18 +100,18 @@
                                         <th>Document Name</th>
                                         <th>Type</th>
                                         <th>Chunks Processed</th>
-                                        <th>Processing Time</th>
+                                        <th>Processing Duration</th>
                                         <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var doc in processedDocuments)
+                                    @foreach (var doc in currentSessionDocuments)
                                     {
                                         <tr>
                                             <td>@doc.Name</td>
                                             <td>@doc.Type</td>
                                             <td>@doc.ChunksProcessed</td>
-                                            <td>@doc.ProcessingTime</td>
+                                            <td>@doc.ProcessingDuration</td>
                                             <td>
                                                 @if (doc.Success)
                                                 {
@@ -131,7 +131,7 @@
                 </div>
             }
 
-            @if (lastRunDocuments.Any() || totalProcessedDocuments.Any())
+            @if (lastRunDocuments.Any() || allProcessedDocuments.Any())
             {
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-success text-white">
@@ -140,24 +140,82 @@
                     <div class="card-body">
                         @if (lastRunDocuments.Any())
                         {
-                            <h6>Last Processing Run:</h6>
-                            <ul>
-                                @foreach (var doc in lastRunDocuments)
-                                {
-                                    <li>@doc.Name (@doc.ChunksProcessed chunks)</li>
-                                }
-                            </ul>
+                            <h6>Last Processing Run (@lastRunDocuments.Count documents, @lastRunDocuments.Sum(d => d.ChunksProcessed) chunks):</h6>
+                            <div class="table-responsive mb-4">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Document</th>
+                                            <th>Type</th>
+                                            <th>Chunks</th>
+                                            <th>Duration</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var doc in lastRunDocuments)
+                                        {
+                                            <tr>
+                                                <td>@doc.FileName</td>
+                                                <td>@doc.DocumentType</td>
+                                                <td>@doc.ChunksProcessed</td>
+                                                <td>@doc.ProcessingDuration</td>
+                                                <td>
+                                                    @if (doc.Success)
+                                                    {
+                                                        <span class="badge bg-success">✓</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-danger">✗</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
                         }
-                        
-                        @if (totalProcessedDocuments.Any())
+
+                        @if (allProcessedDocuments.Any())
                         {
-                            <h6>Total Processed Documents:</h6>
-                            <ul>
-                                @foreach (var doc in totalProcessedDocuments)
-                                {
-                                    <li>@doc.Name (@doc.ChunksProcessed chunks)</li>
-                                }
-                            </ul>
+                            <h6>Total Processed Documents (@allProcessedDocuments.Count documents, @allProcessedDocuments.Sum(d => d.ChunksProcessed) chunks):</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Document</th>
+                                            <th>Type</th>
+                                            <th>Chunks</th>
+                                            <th>Duration</th>
+                                            <th>Processed At</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var doc in allProcessedDocuments.OrderByDescending(d => d.ProcessedAt))
+                                        {
+                                            <tr>
+                                                <td>@doc.FileName</td>
+                                                <td>@doc.DocumentType</td>
+                                                <td>@doc.ChunksProcessed</td>
+                                                <td>@doc.ProcessingDuration</td>
+                                                <td>@doc.ProcessedAt</td>
+                                                <td>
+                                                    @if (doc.Success)
+                                                    {
+                                                        <span class="badge bg-success">✓</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-danger" title="@doc.ErrorMessage">✗</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
                         }
                     </div>
                 </div>
@@ -172,8 +230,8 @@
                     <div class="card-body">
                         <div class="progress mb-3" style="height: 25px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
-                                style="width: @progressPercentage%" aria-valuenow="@progressPercentage" aria-valuemin="0"
-                                aria-valuemax="100">
+                                 style="width: @progressPercentage%" aria-valuenow="@progressPercentage" aria-valuemin="0"
+                                 aria-valuemax="100">
                                 @progressPercentage%
                             </div>
                         </div>
@@ -192,8 +250,7 @@
                         <h5 class="mb-0">✅ Processing Complete</h5>
                     </div>
                     <div class="card-body">
-                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.
-                        </p>
+                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.</p>
                         <p>Your knowledge base is now ready for semantic search!</p>
                         <a href="/search" class="btn btn-primary">Start Searching</a>
                     </div>
@@ -216,59 +273,45 @@
     private int processedChunks = 0;
     private string selectedDocumentType = "transcript";
     private IBrowserFile? selectedFile;
-    private List<ProcessedDocument> processedDocuments = new();
-    private List<ProcessedDocument> lastRunDocuments = new();
-    private List<ProcessedDocument> totalProcessedDocuments = new();
 
-protected override async Task OnInitializedAsync()
-        {
-            Logger.LogInformation("DocumentProcessingPage initialized");
-            await CheckCollectionStatus();
-            await LoadTotalProcessedDocuments();
-        }
+    // Updated data structures using real API data
+    private List<ProcessedDocumentDisplay> currentSessionDocuments = new();
+    private List<ProcessedDocumentInfo> lastRunDocuments = new();
+    private List<ProcessedDocumentInfo> allProcessedDocuments = new();
 
-private async Task LoadTotalProcessedDocuments()
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("DocumentProcessingPage initialized");
+        await CheckCollectionStatus();
+        await LoadProcessingData();
+    }
+
+    private async Task LoadProcessingData()
+    {
+        try
         {
-            try
+            // Load all processed documents
+            var allDocsResponse = await ApiService.GetProcessedDocumentsAsync();
+            if (allDocsResponse.Success && allDocsResponse.Data != null)
             {
-                var response = await ApiService.GetProcessedDocumentsAsync();
-                if (response.Success && response.Data != null)
-                {
-                    totalProcessedDocuments = response.Data.ProcessedFiles.Select(file => new ProcessedDocument
-                    {
-                        Name = file,
-                        Type = file.EndsWith(".pdf") ? "PDF" : "Transcript",
-                        ChunksProcessed = 0, // We don't have this information from the API
-                        ProcessingTime = "Unknown",
-                        Success = true
-                    }).ToList();
-                }
+                allProcessedDocuments = allDocsResponse.Data.ProcessedFiles.ToList();
+                Logger.LogInformation($"Loaded {allProcessedDocuments.Count} processed documents");
             }
-            catch (Exception ex)
+
+            // Load last run details
+            var lastRunResponse = await ApiService.GetLastRunAsync();
+            if (lastRunResponse.Success && lastRunResponse.Data != null)
             {
-                Logger.LogError(ex, "Error loading processed documents");
-                // Fallback to sample data if API call fails
-                totalProcessedDocuments = new List<ProcessedDocument>
-                {
-                    new ProcessedDocument
-                    {
-                        Name = "Sample Document 1",
-                        Type = "PDF",
-                        ChunksProcessed = 42,
-                        ProcessingTime = "14:30:22",
-                        Success = true
-                    },
-                    new ProcessedDocument
-                    {
-                        Name = "Sample Document 2",
-                        Type = "Transcript",
-                        ChunksProcessed = 28,
-                        ProcessingTime = "14:35:10",
-                        Success = true
-                    }
-                };
+                lastRunDocuments = lastRunResponse.Data.Documents.ToList();
+                Logger.LogInformation($"Loaded {lastRunDocuments.Count} documents from last run");
             }
         }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading processing data");
+            statusMessage = "Warning: Could not load processing history data.";
+        }
+    }
 
     private async Task CheckCollectionStatus()
     {
@@ -280,8 +323,8 @@ private async Task LoadTotalProcessedDocuments()
             {
                 collectionExists = response.Data.CollectionExists;
                 statusMessage = collectionExists
-                ? "Knowledge base is ready! You can start searching your documents."
-                : "Knowledge base not found. Process your documents to enable search.";
+                    ? "Knowledge base is ready! You can start searching your documents."
+                    : "Knowledge base not found. Process your documents to enable search.";
                 Logger.LogInformation($"Collection status check completed. Collection exists: {collectionExists}");
             }
             else
@@ -297,66 +340,64 @@ private async Task LoadTotalProcessedDocuments()
         }
     }
 
-private async Task ProcessDocuments()
+    private async Task ProcessDocuments()
+    {
+        Logger.LogInformation("Starting document processing");
+        isProcessing = true;
+        processingComplete = false;
+        progressPercentage = 0;
+        progressMessage = "Starting document processing...";
+        progressDetails = "Initializing services";
+        processedChunks = 0;
+        statusMessage = "";
+
+        try
         {
-            Logger.LogInformation("Starting document processing");
-            isProcessing = true;
-            processingComplete = false;
-            progressPercentage = 0;
-            progressMessage = "Starting document processing...";
-            progressDetails = "Initializing services";
-            processedChunks = 0;
-            statusMessage = "";
+            Logger.LogInformation("Calling API to process documents");
+            var response = await ApiService.ProcessDocumentsAsync();
+            Logger.LogInformation("Received API response for document processing");
 
-            // Clear previous run data
-            lastRunDocuments.Clear();
-
-            try
+            if (response.Success && response.Data != null)
             {
-                Logger.LogInformation("Calling API to process documents");
-                var response = await ApiService.ProcessDocumentsAsync();
-                Logger.LogInformation("Received API response for document processing");
-                if (response.Success && response.Data != null)
+                processedChunks = response.Data.ChunksProcessed;
+                processingComplete = true;
+                collectionExists = true;
+                statusMessage = response.Data.Message;
+                progressMessage = "Processing complete!";
+                progressDetails = $"Processed {processedChunks} document chunks";
+                progressPercentage = 100;
+                Logger.LogInformation($"Document processing completed successfully. Processed {processedChunks} chunks");
+
+                // Add to current session tracking
+                var sessionDoc = new ProcessedDocumentDisplay
                 {
-                    processedChunks = response.Data.ChunksProcessed;
-                    processingComplete = true;
-                    collectionExists = true;
-                    statusMessage = response.Data.Message;
-                    progressMessage = "Processing complete!";
-                    progressDetails = $"Processed {processedChunks} document chunks";
-                    progressPercentage = 100;
-                    Logger.LogInformation($"Document processing completed successfully. Processed {processedChunks} chunks");
+                    Name = "Batch Processing",
+                    Type = "All Documents",
+                    ChunksProcessed = response.Data.ChunksProcessed,
+                    ProcessingDuration = "Unknown", // Batch processing doesn't return duration
+                    Success = true
+                };
+                currentSessionDocuments.Add(sessionDoc);
 
-                    // Add to processed documents list
-                    var processedDoc = new ProcessedDocument
-                    {
-                        Name = "All Documents",
-                        Type = "Batch",
-                        ChunksProcessed = response.Data.ChunksProcessed,
-                        ProcessingTime = DateTime.Now.ToString("HH:mm:ss"),
-                        Success = true
-                    };
-                    
-                    processedDocuments.Add(processedDoc);
-                    lastRunDocuments.Add(processedDoc);
-                    totalProcessedDocuments.Add(processedDoc);
-                }
-                else
-                {
-                    statusMessage = $"Error: {response.Error}";
-                    Logger.LogWarning("Document processing failed: {0}", response.Error);
-                }
+                // Reload the processing data to reflect new state
+                await LoadProcessingData();
             }
-            catch (Exception ex)
+            else
             {
-                statusMessage = $"Error: {ex.Message}";
-                Logger.LogError(ex, "Unexpected error during document processing");
-            }
-            finally
-            {
-                isProcessing = false;
+                statusMessage = $"Error: {response.Error}";
+                Logger.LogWarning("Document processing failed: {0}", response.Error);
             }
         }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+            Logger.LogError(ex, "Unexpected error during document processing");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
 
     private void OnFileSelected(InputFileChangeEventArgs e)
     {
@@ -378,50 +419,48 @@ private async Task ProcessDocuments()
         try
         {
             Logger.LogInformation("Selected file: {0} ({1} bytes)", selectedFile.Name, selectedFile.Size);
-            Logger.LogInformation("File type: {0}", selectedDocumentType);
 
             // Read the file content
             using var stream = selectedFile.OpenReadStream(10_000_000); // 10MB limit
-            Logger.LogInformation("Reading file content...");
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
             var fileContent = memoryStream.ToArray();
-            Logger.LogInformation("File read completed. Size: {0} bytes", fileContent.Length);
 
             // Call the API to upload and process the document
-            Logger.LogInformation("Calling API to upload document");
             var response = await ApiService.UploadDocumentAsync(selectedFile.Name, selectedDocumentType, fileContent);
-            Logger.LogInformation("Received API response for document upload");
 
             if (response.Success && response.Data != null)
             {
-                statusMessage = $"✅ {response.Data.Message} ({response.Data.ChunksProcessed} chunks processed)";
+                statusMessage = $"✅ {response.Data.Message}";
                 Logger.LogInformation("Document upload completed successfully. Processed {0} chunks", response.Data.ChunksProcessed);
 
-                // Add to processed documents list
-                processedDocuments.Add(new ProcessedDocument
+                // Add to current session tracking
+                currentSessionDocuments.Add(new ProcessedDocumentDisplay
                 {
                     Name = selectedFile.Name,
-                    Type = selectedDocumentType,
+                    Type = selectedDocumentType == "pdf" ? "PDF" : "Transcript",
                     ChunksProcessed = response.Data.ChunksProcessed,
-                    ProcessingTime = DateTime.Now.ToString("HH:mm:ss"),
+                    ProcessingDuration = response.Data.ProcessingDuration,
                     Success = true
                 });
 
                 selectedFile = null;
+
+                // Reload processing data to include the new document
+                await LoadProcessingData();
             }
             else
             {
                 statusMessage = $"Error uploading document: {response.Error}";
                 Logger.LogWarning("Document upload failed: {0}", response.Error);
 
-                // Add to processed documents list with error status
-                processedDocuments.Add(new ProcessedDocument
+                // Add to current session tracking with error status
+                currentSessionDocuments.Add(new ProcessedDocumentDisplay
                 {
                     Name = selectedFile.Name,
-                    Type = selectedDocumentType,
+                    Type = selectedDocumentType == "pdf" ? "PDF" : "Transcript",
                     ChunksProcessed = 0,
-                    ProcessingTime = DateTime.Now.ToString("HH:mm:ss"),
+                    ProcessingDuration = "Failed",
                     Success = false
                 });
             }
@@ -431,29 +470,29 @@ private async Task ProcessDocuments()
             statusMessage = $"Error uploading document: {ex.Message}";
             Logger.LogError(ex, "Error uploading document {0}", selectedFile?.Name);
 
-            // Add to processed documents list with error status
-            processedDocuments.Add(new ProcessedDocument
+            // Add to current session tracking with error status
+            currentSessionDocuments.Add(new ProcessedDocumentDisplay
             {
                 Name = selectedFile?.Name ?? "Unknown",
-                Type = selectedDocumentType,
+                Type = selectedDocumentType == "pdf" ? "PDF" : "Transcript",
                 ChunksProcessed = 0,
-                ProcessingTime = DateTime.Now.ToString("HH:mm:ss"),
+                ProcessingDuration = "Failed",
                 Success = false
             });
         }
         finally
         {
             isUploading = false;
-            Logger.LogInformation("Document upload process completed");
         }
     }
 
-    public class ProcessedDocument
+    // Display model for current session (since we don't have all the metadata immediately)
+    public class ProcessedDocumentDisplay
     {
         public string Name { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public int ChunksProcessed { get; set; }
-        public string ProcessingTime { get; set; } = string.Empty;
+        public string ProcessingDuration { get; set; } = string.Empty;
         public bool Success { get; set; }
     }
 }

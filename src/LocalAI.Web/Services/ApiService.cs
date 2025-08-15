@@ -11,6 +11,8 @@ public interface IApiService
     Task<ApiResponse<CollectionStatusResponse>> GetCollectionStatusAsync();
     Task<ApiResponse<UploadDocumentResponse>> UploadDocumentAsync(string fileName, string fileType, byte[] fileContent);
     Task<ApiResponse<ProcessedDocumentsResponse>> GetProcessedDocumentsAsync();
+    Task<ApiResponse<LastRunResponse>> GetLastRunAsync();
+    Task<ApiResponse<ProcessingSummaryResponse>> GetProcessingSummaryAsync();
 }
 
 public class ApiService : IApiService
@@ -100,19 +102,14 @@ public class ApiService : IApiService
     {
         try
         {
-            // Create multipart form data content
             using var content = new MultipartFormDataContent();
-
-            // Add file content
             using var fileStream = new MemoryStream(fileContent);
             using var fileContentStream = new StreamContent(fileStream);
+
             fileContentStream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(GetContentType(fileName));
             content.Add(fileContentStream, "file", fileName);
-
-            // Add document type
             content.Add(new StringContent(fileType), "documentType");
 
-            // Call the API endpoint
             var response = await _httpClient.PostAsync("/api/documents/upload", content);
 
             if (response.IsSuccessStatusCode)
@@ -129,17 +126,6 @@ public class ApiService : IApiService
         {
             return new ApiResponse<UploadDocumentResponse> { Success = false, Error = ex.Message };
         }
-    }
-
-    private string GetContentType(string fileName)
-    {
-        var extension = Path.GetExtension(fileName).ToLowerInvariant();
-        return extension switch
-        {
-            ".pdf" => "application/pdf",
-            ".txt" => "text/plain",
-            _ => "application/octet-stream"
-        };
     }
 
     public async Task<ApiResponse<ProcessedDocumentsResponse>> GetProcessedDocumentsAsync()
@@ -163,9 +149,64 @@ public class ApiService : IApiService
             return new ApiResponse<ProcessedDocumentsResponse> { Success = false, Error = ex.Message };
         }
     }
+
+    public async Task<ApiResponse<LastRunResponse>> GetLastRunAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("/api/documents/last-run");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<LastRunResponse>(content, _jsonOptions);
+                return new ApiResponse<LastRunResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<LastRunResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<LastRunResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<ProcessingSummaryResponse>> GetProcessingSummaryAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("/api/documents/summary");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ProcessingSummaryResponse>(content, _jsonOptions);
+                return new ApiResponse<ProcessingSummaryResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<ProcessingSummaryResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ProcessingSummaryResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
+    private string GetContentType(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        return extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".txt" => "text/plain",
+            _ => "application/octet-stream"
+        };
+    }
 }
 
-// DTOs matching your API
+// DTOs matching the actual API responses
 public record SearchRequest(string Query, int? Limit = 8);
 
 public record SearchResponse
@@ -188,23 +229,59 @@ public record CollectionStatusResponse
     public bool CollectionExists { get; set; }
 }
 
+public record UploadDocumentResponse
+{
+    public bool Success { get; set; }
+    public int ChunksProcessed { get; set; }
+    public string ProcessingDuration { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+}
+
+// Updated DTOs to match the enhanced API endpoints
+public record ProcessedDocumentsResponse
+{
+    public bool Success { get; set; }
+    public ProcessedDocumentInfo[] ProcessedFiles { get; set; } = Array.Empty<ProcessedDocumentInfo>();
+    public int TotalCount { get; set; }
+    public int TotalChunks { get; set; }
+    public int SuccessfulDocuments { get; set; }
+    public int FailedDocuments { get; set; }
+}
+
+public record ProcessedDocumentInfo
+{
+    public string FileName { get; set; } = string.Empty;
+    public string DocumentType { get; set; } = string.Empty;
+    public int ChunksProcessed { get; set; }
+    public string ProcessingDuration { get; set; } = string.Empty;
+    public string ProcessedAt { get; set; } = string.Empty;
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
+public record LastRunResponse
+{
+    public bool Success { get; set; }
+    public int DocumentsProcessed { get; set; }
+    public int TotalChunks { get; set; }
+    public ProcessedDocumentInfo[] Documents { get; set; } = Array.Empty<ProcessedDocumentInfo>();
+}
+
+public record ProcessingSummaryResponse
+{
+    public bool Success { get; set; }
+    public int TotalDocuments { get; set; }
+    public int TotalChunks { get; set; }
+    public int SuccessfulDocuments { get; set; }
+    public int FailedDocuments { get; set; }
+    public int LastRunDocuments { get; set; }
+    public int LastRunChunks { get; set; }
+    public ProcessedDocumentInfo[] LastRunDetails { get; set; } = Array.Empty<ProcessedDocumentInfo>();
+}
+
 public class ApiResponse<T>
 {
     public bool Success { get; set; }
     public T? Data { get; set; }
     public string Error { get; set; } = string.Empty;
-}
-
-public record UploadDocumentResponse
-{
-    public bool Success { get; set; }
-    public int ChunksProcessed { get; set; }
-    public string Message { get; set; } = string.Empty;
-}
-
-public record ProcessedDocumentsResponse
-{
-    public bool Success { get; set; }
-    public string[] ProcessedFiles { get; set; } = Array.Empty<string>();
-    public int TotalCount { get; set; }
 }
