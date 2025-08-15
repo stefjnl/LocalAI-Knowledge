@@ -365,3 +365,27 @@ FodyWeavers.xsd
 *.sln.iml   wwwroot/css/bootstrap/
 wwwroot/lib/
 # Static assets
+
+# Data directories - contains processed knowledge content
+data/
+DataToProcess/
+
+# Local development files
+lib/bootstrap/
+favicon.png
+
+# Generated/downloaded content
+*.pdf
+*.mp4
+*.mp3
+*.wav
+
+# Local AI model files (if any)
+models/
+embeddings/
+
+# Environment-specific files
+appsettings.Development.json
+appsettings.Local.json
+
+src/LocalAI.Web/wwwroot/
