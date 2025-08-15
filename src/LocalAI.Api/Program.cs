@@ -1,5 +1,6 @@
 using DotNetEnv;
 using LocalAI.Core.Interfaces;
+using LocalAI.Core.Models;
 using LocalAI.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -98,6 +99,77 @@ app.MapPost("/api/documents/process", async (IDocumentProcessor processor, IVect
     catch (Exception ex)
     {
         return Results.Problem($"Error processing documents: {ex.Message}");
+    }
+});
+
+app.MapPost("/api/documents/upload", async (HttpRequest request, IDocumentProcessor processor, IVectorSearchService vectorSearch) =>
+{
+    try
+    {
+        // Check if the request contains a file
+        if (!request.HasFormContentType)
+        {
+            return Results.BadRequest("Invalid content type. Expected form data.");
+        }
+
+        var form = await request.ReadFormAsync();
+        var file = form.Files.GetFile("file");
+
+        if (file == null || file.Length == 0)
+        {
+            return Results.BadRequest("No file uploaded.");
+        }
+
+        // Get document type from form
+        var documentType = form["documentType"].ToString() ?? "transcript";
+
+        // Save file to appropriate directory
+        var fileName = Path.GetFileNameWithoutExtension(file.FileName);
+        var fileExtension = Path.GetExtension(file.FileName);
+        var safeFileName = $"{fileName}_{Guid.NewGuid()}{fileExtension}";
+
+        var targetDirectory = documentType == "pdf" ? "data/pdfs/" : "data/transcripts/";
+        var filePath = Path.Combine(targetDirectory, safeFileName);
+
+        // Create directory if it doesn't exist
+        Directory.CreateDirectory(targetDirectory);
+
+        // Save file
+        using var stream = File.Create(filePath);
+        await file.CopyToAsync(stream);
+
+        // Process the uploaded file
+        List<DocumentChunk> chunks = new();
+        if (documentType == "pdf")
+        {
+            chunks = await processor.ProcessPdfFileAsync(filePath);
+        }
+        else
+        {
+            chunks = await processor.ProcessTextFileAsync(filePath);
+        }
+
+        if (chunks.Count > 0)
+        {
+            await vectorSearch.StoreDocumentsAsync(chunks);
+            return Results.Ok(new
+            {
+                Success = true,
+                ChunksProcessed = chunks.Count,
+                Message = $"Successfully processed '{file.FileName}' ({chunks.Count} chunks)"
+            });
+        }
+
+        return Results.Ok(new
+        {
+            Success = false,
+            ChunksProcessed = 0,
+            Message = $"No content found in '{file.FileName}'"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error processing uploaded document: {ex.Message}");
     }
 });
 

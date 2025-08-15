@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Net.Http;
+using System.Text.Json;
 using LocalAI.Core.Models;
 
 namespace LocalAI.Web.Services;
@@ -8,6 +9,7 @@ public interface IApiService
     Task<ApiResponse<SearchResponse>> SearchAsync(string query, int limit = 8);
     Task<ApiResponse<ProcessDocumentsResponse>> ProcessDocumentsAsync();
     Task<ApiResponse<CollectionStatusResponse>> GetCollectionStatusAsync();
+    Task<ApiResponse<UploadDocumentResponse>> UploadDocumentAsync(string fileName, string fileType, byte[] fileContent);
 }
 
 public class ApiService : IApiService
@@ -18,7 +20,7 @@ public class ApiService : IApiService
     public ApiService(HttpClient httpClient, IConfiguration configuration)
     {
         _httpClient = httpClient;
-        _httpClient.BaseAddress = new Uri(configuration["ApiSettings:BaseUrl"] ?? "http://localai-api:8080");   
+        _httpClient.BaseAddress = new Uri(configuration["ApiSettings:BaseUrl"] ?? "http://localai-api:8080");
 
         _jsonOptions = new JsonSerializerOptions
         {
@@ -92,6 +94,52 @@ public class ApiService : IApiService
             return new ApiResponse<CollectionStatusResponse> { Success = false, Error = ex.Message };
         }
     }
+
+    public async Task<ApiResponse<UploadDocumentResponse>> UploadDocumentAsync(string fileName, string fileType, byte[] fileContent)
+    {
+        try
+        {
+            // Create multipart form data content
+            using var content = new MultipartFormDataContent();
+
+            // Add file content
+            using var fileStream = new MemoryStream(fileContent);
+            using var fileContentStream = new StreamContent(fileStream);
+            fileContentStream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(GetContentType(fileName));
+            content.Add(fileContentStream, "file", fileName);
+
+            // Add document type
+            content.Add(new StringContent(fileType), "documentType");
+
+            // Call the API endpoint
+            var response = await _httpClient.PostAsync("/api/documents/upload", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<UploadDocumentResponse>(responseContent, _jsonOptions);
+                return new ApiResponse<UploadDocumentResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<UploadDocumentResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<UploadDocumentResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
+    private string GetContentType(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        return extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".txt" => "text/plain",
+            _ => "application/octet-stream"
+        };
+    }
 }
 
 // DTOs matching your API
@@ -122,4 +170,11 @@ public class ApiResponse<T>
     public bool Success { get; set; }
     public T? Data { get; set; }
     public string Error { get; set; } = string.Empty;
+}
+
+public record UploadDocumentResponse
+{
+    public bool Success { get; set; }
+    public int ChunksProcessed { get; set; }
+    public string Message { get; set; } = string.Empty;
 }

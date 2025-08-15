@@ -1,6 +1,8 @@
 @page "/documents"
 @using LocalAI.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
 @inject IApiService ApiService
+@rendermode @(new InteractiveServerRenderMode())
 
 <PageTitle>Document Processing</PageTitle>
 
@@ -16,7 +18,7 @@
             @if (!string.IsNullOrEmpty(statusMessage))
             {
                 <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show"
-                    role="alert">
+                     role="alert">
                     <strong>@(collectionExists ? "✅" : "⚠️")</strong> @statusMessage
                 </div>
             }
@@ -47,6 +49,41 @@
                 </div>
             </div>
 
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Upload New Documents</h5>
+                </div>
+                <div class="card-body">
+                    <p>Upload new documents to be processed and added to your knowledge base.</p>
+
+                    <div class="mb-3">
+                        <label for="documentType" class="form-label">Document Type</label>
+                        <select class="form-select" id="documentType" @bind="selectedDocumentType">
+                            <option value="transcript">Transcript (.txt)</option>
+                            <option value="pdf">PDF Document (.pdf)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="fileUpload" class="form-label">Select File</label>
+                        <InputFile id="fileUpload" class="form-control" accept=".txt,.pdf" OnChange="OnFileSelected" />
+                    </div>
+
+                    <button type="button" class="btn btn-success" @onclick="UploadDocument"
+                            disabled="@(isUploading || selectedFile == null)">
+                        @if (isUploading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Uploading...</span>
+                        }
+                        else
+                        {
+                            <span>📤 Upload and Process Document</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
             @if (isProcessing)
             {
                 <div class="card shadow-sm border-0 mb-4">
@@ -56,8 +93,8 @@
                     <div class="card-body">
                         <div class="progress mb-3" style="height: 25px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
-                                style="width: @progressPercentage%" aria-valuenow="@progressPercentage" aria-valuemin="0"
-                                aria-valuemax="100">
+                                 style="width: @progressPercentage%" aria-valuenow="@progressPercentage" aria-valuemin="0"
+                                 aria-valuemax="100">
                                 @progressPercentage%
                             </div>
                         </div>
@@ -76,8 +113,7 @@
                         <h5 class="mb-0">✅ Processing Complete</h5>
                     </div>
                     <div class="card-body">
-                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.
-                        </p>
+                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.</p>
                         <p>Your knowledge base is now ready for semantic search!</p>
                         <a href="/search" class="btn btn-primary">Start Searching</a>
                     </div>
@@ -90,6 +126,7 @@
 
 @code {
     private bool isProcessing = false;
+    private bool isUploading = false;
     private bool collectionExists = false;
     private bool processingComplete = false;
     private string statusMessage = "";
@@ -97,6 +134,8 @@
     private string progressMessage = "Ready to process";
     private string progressDetails = "";
     private int processedChunks = 0;
+    private string selectedDocumentType = "transcript";
+    private IBrowserFile? selectedFile;
 
     protected override async Task OnInitializedAsync()
     {
@@ -138,19 +177,22 @@
 
         try
         {
-            // Simulate progress updates
-            await SimulateProgress();
-
-            // In a real implementation, we would call the API to process documents
-            // For now, we'll simulate the process
-            await Task.Delay(3000); // Simulate processing time
-
-            processedChunks = 2098; // Simulate processed chunks
-            processingComplete = true;
-            collectionExists = true;
-            statusMessage = "Knowledge base successfully updated!";
-            progressMessage = "Processing complete!";
-            progressDetails = $"Processed {processedChunks} document chunks";
+            // Call the real API instead of simulation
+            var response = await ApiService.ProcessDocumentsAsync();
+            if (response.Success && response.Data != null)
+            {
+                processedChunks = response.Data.ChunksProcessed;
+                processingComplete = true;
+                collectionExists = true;
+                statusMessage = response.Data.Message;
+                progressMessage = "Processing complete!";
+                progressDetails = $"Processed {processedChunks} document chunks";
+                progressPercentage = 100;
+            }
+            else
+            {
+                statusMessage = $"Error: {response.Error}";
+            }
         }
         catch (Exception ex)
         {
@@ -162,33 +204,46 @@
         }
     }
 
-    private async Task SimulateProgress()
+    private void OnFileSelected(InputFileChangeEventArgs e)
     {
-        // This method simulates progress updates during document processing
-        for (int i = 0; i <= 100; i += 10)
+        selectedFile = e.File;
+    }
+
+    private async Task UploadDocument()
+    {
+        if (selectedFile == null) return;
+
+        isUploading = true;
+        statusMessage = "";
+
+        try
         {
-            progressPercentage = i;
-            progressMessage = "Processing documents...";
-            progressDetails = $"Progress: {i}%";
+            // Read the file content
+            using var stream = selectedFile.OpenReadStream(10_000_000); // 10MB limit
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var fileContent = memoryStream.ToArray();
 
-            if (i == 30)
-            {
-                progressMessage = "Extracting text from documents...";
-                progressDetails = "Processing PDF files";
-            }
-            else if (i == 60)
-            {
-                progressMessage = "Generating embeddings...";
-                progressDetails = "Creating vector representations";
-            }
-            else if (i == 90)
-            {
-                progressMessage = "Storing in vector database...";
-                progressDetails = "Saving to Qdrant";
-            }
+            // Call the API to upload and process the document
+            var response = await ApiService.UploadDocumentAsync(selectedFile.Name, selectedDocumentType, fileContent);
 
-            await Task.Delay(300); // Simulate processing time
-            StateHasChanged(); // Update UI
+            if (response.Success && response.Data != null)
+            {
+                statusMessage = $"✅ {response.Data.Message} ({response.Data.ChunksProcessed} chunks processed)";
+                selectedFile = null;
+            }
+            else
+            {
+                statusMessage = $"Error uploading document: {response.Error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error uploading document: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
         }
     }
 }
