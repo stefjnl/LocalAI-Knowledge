@@ -1,7 +1,9 @@
 ﻿using LocalAI.Core.Interfaces;
 using LocalAI.Core.Models;
 using Microsoft.Extensions.Configuration;
-using Patagames.Pdf.Net;
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Content;
+using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 
 namespace LocalAI.Infrastructure.Services
 {
@@ -16,9 +18,6 @@ namespace LocalAI.Infrastructure.Services
             _embeddingService = embeddingService;
             _transcriptsPath = configuration["DocumentPaths:Transcripts"] ?? "data/transcripts/";
             _pdfsPath = configuration["DocumentPaths:PDFs"] ?? "data/pdfs/";
-
-            // Initialize PDF library
-            PdfCommon.Initialize();
         }
 
         public async Task<List<DocumentChunk>> ProcessAllDocumentsAsync()
@@ -42,8 +41,16 @@ namespace LocalAI.Infrastructure.Services
                 var pdfFiles = Directory.GetFiles(_pdfsPath, "*.pdf", SearchOption.AllDirectories);
                 foreach (var file in pdfFiles)
                 {
-                    var chunks = await ProcessPdfFileAsync(file);
-                    allChunks.AddRange(chunks);
+                    try
+                    {
+                        var chunks = await ProcessPdfFileAsync(file);
+                        allChunks.AddRange(chunks);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error processing PDF {file}: {ex.Message}");
+                        // Continue with next file instead of failing completely
+                    }
                 }
             }
 
@@ -102,22 +109,19 @@ namespace LocalAI.Infrastructure.Services
             var fullText = "";
             var pageBreaks = new List<(int pageNum, int charStart)>();
 
-            using (var doc = PdfDocument.Load(filePath))
+            using (var document = PdfDocument.Open(filePath))
             {
-                for (int pageIndex = 0; pageIndex < doc.Pages.Count; pageIndex++)
+                foreach (var page in document.GetPages())
                 {
-                    pageBreaks.Add((pageIndex + 1, fullText.Length));
+                    pageBreaks.Add((page.Number, fullText.Length));
 
-                    using (var page = doc.Pages[pageIndex])
+                    // Use simple page.Text for faster extraction (like old Pdfium approach)
+                    var pageText = ContentOrderTextExtractor.GetText(page); 
+                    pageText = CleanPdfText(pageText);
+
+                    if (!string.IsNullOrWhiteSpace(pageText))
                     {
-                        int charCount = page.Text.CountChars;
-
-                        if (charCount > 0)
-                        {
-                            var pageText = page.Text.GetText(0, charCount);
-                            pageText = CleanPdfText(pageText);
-                            fullText += pageText + "\n\n";
-                        }
+                        fullText += pageText + "\n\n";
                     }
                 }
             }
@@ -130,14 +134,14 @@ namespace LocalAI.Infrastructure.Services
             return text
                 .Replace("\r\n", "\n")
                 .Replace("\r", "\n")
-                .Replace("\u00A0", " ")
-                .Replace("\u2010", "-")
-                .Replace("\u2013", "-")
-                .Replace("\u2014", "-")
-                .Replace("\u201C", "\"")
-                .Replace("\u201D", "\"")
-                .Replace("\u2018", "'")
-                .Replace("\u2019", "'")
+                .Replace("\u00A0", " ")  // Non-breaking space
+                .Replace("\u2010", "-") // Hyphen
+                .Replace("\u2013", "-") // En dash
+                .Replace("\u2014", "-") // Em dash
+                .Replace("\u201C", "\"") // Left double quotation mark
+                .Replace("\u201D", "\"") // Right double quotation mark
+                .Replace("\u2018", "'")  // Left single quotation mark
+                .Replace("\u2019", "'")  // Right single quotation mark
                 .Trim();
         }
 

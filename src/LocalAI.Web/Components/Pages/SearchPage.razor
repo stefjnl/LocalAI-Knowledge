@@ -1,0 +1,258 @@
+﻿@page "/search"
+@page "/"
+@using LocalAI.Web.Services
+@using LocalAI.Core.Models
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components
+@inject IApiService ApiService
+@rendermode @(new InteractiveServerRenderMode())
+
+<PageTitle>Knowledge Search</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+
+            <div class="text-center mb-4">
+                <h1 class="display-5 fw-bold text-primary">🧠 Local AI Knowledge Assistant</h1>
+                <p class="lead text-muted">Search through your personal knowledge base using semantic AI</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show" role="alert">
+                    <strong>@(collectionExists ? "✅" : "⚠️")</strong> @statusMessage
+                    @if (!collectionExists)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" @onclick="ProcessDocuments" disabled="@isProcessing">
+                            @if (isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                <span>Processing...</span>
+                            }
+                            else
+                            {
+                                <span>📚 Process Documents</span>
+                            }
+                        </button>
+                    }
+                </div>
+            }
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text bg-light border-end-0">🔍</span>
+                        <input type="text" class="form-control border-start-0 ps-0"
+                               placeholder="Ask anything about your knowledge base..."
+                               @bind="searchQuery"
+                               @onkeypress="OnKeyPress"
+                               disabled="@isSearching" />
+                        <button class="btn btn-primary px-4" type="button" @onclick="PerformSearch" disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
+                            @if (isSearching)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                <span>Searching...</span>
+                            }
+                            else
+                            {
+                                <span>Search</span>
+                            }
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(searchError))
+                    {
+                        <div class="alert alert-danger mt-3 mb-0" role="alert">
+                            <strong>Error:</strong> @searchError
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (searchResponse != null)
+            {
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">AI Response for: "@searchResponse.Query"</h5>
+                    </div>
+                    <div class="card-body">
+
+                        <div class="mb-4">
+                            <div class="bg-light rounded p-4 border-start border-primary border-4">
+                                @if (!string.IsNullOrEmpty(searchResponse.RAGResponse))
+                                {
+                                    <div class="rag-response">
+                                        @((MarkupString)FormatResponse(searchResponse.RAGResponse))
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="text-muted mb-0">No response generated.</p>
+                                }
+                            </div>
+                        </div>
+
+                        @if (searchResponse.Sources?.Any() == true)
+                        {
+                            <div class="border-top pt-4">
+                                <h6 class="text-muted mb-3">Sources (@searchResponse.Sources.Count)</h6>
+                                <div class="row g-3">
+                                    @foreach (var source in searchResponse.Sources)
+                                    {
+                                        <div class="col-md-6">
+                                            <div class="card h-100 border-0 bg-light">
+                                                <div class="card-body p-3">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <h6 class="card-title text-primary mb-0">
+                                                            📄 @GetSourceName(source.Source)
+                                                        </h6>
+                                                        <span class="badge bg-primary rounded-pill">
+                                                            @(((int)(source.Score * 100)).ToString())%
+                                                        </span>
+                                                    </div>
+                                                    @if (!string.IsNullOrEmpty(source.PageInfo))
+                                                    {
+                                                        <small class="text-muted d-block mb-2">@source.PageInfo</small>
+                                                    }
+                                                    <p class="card-text small text-muted">
+                                                        @TruncateContent(source.Content, 150)
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+        </div>
+    </div>
+</div>
+
+@code {
+    private string searchQuery = "";
+    private bool isSearching = false;
+    private bool isProcessing = false;
+    private bool collectionExists = false;
+    private string statusMessage = "";
+    private string searchError = "";
+    private SearchResponse? searchResponse;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckCollectionStatus();
+    }
+
+    private async Task CheckCollectionStatus()
+    {
+        try
+        {
+            var response = await ApiService.GetCollectionStatusAsync();
+            if (response.Success && response.Data != null)
+            {
+                collectionExists = response.Data.CollectionExists;
+                statusMessage = collectionExists
+                    ? "Knowledge base is ready! You can start searching your documents."
+                    : "Knowledge base not found. Process your documents first to enable search.";
+            }
+            else
+            {
+                statusMessage = "Unable to check knowledge base status. Make sure the API is running.";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error checking status: {ex.Message}";
+        }
+    }
+
+    private async Task ProcessDocuments()
+    {
+        isProcessing = true;
+        try
+        {
+            var response = await ApiService.ProcessDocumentsAsync();
+            if (response.Success && response.Data != null)
+            {
+                statusMessage = response.Data.Message;
+                if (response.Data.Success)
+                {
+                    collectionExists = true;
+                    statusMessage = $"✅ Successfully processed {response.Data.ChunksProcessed} document chunks!";
+                }
+            }
+            else
+            {
+                statusMessage = $"Error processing documents: {response.Error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task PerformSearch()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery)) return;
+
+        isSearching = true;
+        searchError = "";
+        searchResponse = null;
+
+        try
+        {
+            var response = await ApiService.SearchAsync(searchQuery.Trim());
+            if (response.Success && response.Data != null)
+            {
+                searchResponse = response.Data;
+            }
+            else
+            {
+                searchError = response.Error ?? "Unknown error occurred";
+            }
+        }
+        catch (Exception ex)
+        {
+            searchError = ex.Message;
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private async Task OnKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isSearching && !string.IsNullOrWhiteSpace(searchQuery))
+        {
+            await PerformSearch();
+        }
+    }
+
+    private string FormatResponse(string response)
+    {
+        return response.Replace("\n", "<br>");
+    }
+
+    private string GetSourceName(string source)
+    {
+        return Path.GetFileNameWithoutExtension(source);
+    }
+
+    private string TruncateContent(string content, int maxLength)
+    {
+        if (string.IsNullOrEmpty(content) || content.Length <= maxLength)
+            return content;
+
+        return content.Substring(0, maxLength) + "...";
+    }
+}

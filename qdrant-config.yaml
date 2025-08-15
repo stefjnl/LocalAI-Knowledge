@@ -1,0 +1,25 @@
+service:
+  http_port: 6333
+  grpc_port: 6334
+
+storage:
+  optimizers:
+    indexing_threshold: 500
+    vacuum_min_vector_number: 100
+    default_segment_number: 1
+    flush_interval_sec: 3
+    max_optimization_threads: 4
+  hnsw:
+    m: 32
+    ef_construct: 200
+    full_scan_threshold: 1000
+    on_disk: false
+    max_indexing_threads: 4
+  wal:
+    wal_capacity_mb: 64
+    wal_segments_ahead: 2
+
+telemetry:
+  disabled: true
+
+log_level: INFO

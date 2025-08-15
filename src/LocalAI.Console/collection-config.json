@@ -1,0 +1,14 @@
+﻿{
+  "vectors": {
+    "size": 768,
+    "distance": "Cosine"
+  },
+  "optimizers_config": {
+    "indexing_threshold": 500
+  },
+  "hnsw_config": {
+    "m": 32,
+    "ef_construct": 200,
+    "full_scan_threshold": 1000
+  }
+}

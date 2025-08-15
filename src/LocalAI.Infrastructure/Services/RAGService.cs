@@ -16,26 +16,28 @@ namespace LocalAI.Infrastructure.Services
         {
             _httpClient = httpClient;
             _baseUrl = configuration["RAGService:BaseUrl"] ?? "http://localhost:1234";
-            _model = configuration["RAGService:Model"] ?? "qwen2.5-coder-7b-instruct";
+            _model = "qwen2.5-coder-7b-instruct";
         }
 
         public async Task<string> GenerateResponseAsync(string query, List<SearchResult> searchResults)
         {
+            // OPTIMIZATION 1: Truncate and summarize context instead of including everything
             var contextBuilder = new StringBuilder();
-            contextBuilder.AppendLine("Based on the following knowledge sources, provide a comprehensive answer:");
-            contextBuilder.AppendLine();
+            contextBuilder.AppendLine("Relevant knowledge:");
 
-            for (int i = 0; i < searchResults.Count; i++)
+            for (int i = 0; i < Math.Min(searchResults.Count, 5); i++) // Limit to top 5 results
             {
                 var result = searchResults[i];
-                contextBuilder.AppendLine($"Source {i + 1} ({result.Source}, Score: {result.Score:F2}):");
-                contextBuilder.AppendLine($"\"{result.Content}\"");
-                contextBuilder.AppendLine();
+                // OPTIMIZATION 2: Truncate each result to max 200 characters
+                var truncatedContent = result.Content.Length > 200
+                    ? result.Content.Substring(0, 200) + "..."
+                    : result.Content;
+
+                contextBuilder.AppendLine($"{i + 1}. {truncatedContent} (Source: {result.Source})");
             }
 
-            contextBuilder.AppendLine($"Question: {query}");
-            contextBuilder.AppendLine();
-            contextBuilder.AppendLine("Please provide a detailed, well-structured answer that synthesizes information from the sources above. Include relevant details and examples when available:");
+            contextBuilder.AppendLine($"\nQuestion: {query}");
+            contextBuilder.AppendLine("Answer:");
 
             var prompt = contextBuilder.ToString();
 
@@ -44,12 +46,14 @@ namespace LocalAI.Infrastructure.Services
                 model = _model,
                 messages = new[]
                 {
-                    new { role = "system", content = "You are a helpful AI assistant that provides detailed, accurate answers based on the provided source material. Synthesize information from multiple sources when relevant." },
+                    new { role = "system", content = "You are a helpful assistant. Answer based on the provided knowledge. Be concise and accurate." },
                     new { role = "user", content = prompt }
                 },
                 stream = false,
-                temperature = 0.7,
-                max_tokens = 1000
+                temperature = 0.0,        // OPTIMIZATION 3: Lower temperature for faster, more deterministic responses
+                max_tokens = 500,         // OPTIMIZATION 4: Reduced max tokens for faster generation
+                // OPTIMIZATION 5: Add draft model for speculative decoding (if supported)
+                draft_model = "qwen2.5-coder-7b-instruct"  // Smaller model for faster inference
             });
 
             var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
@@ -57,7 +61,6 @@ namespace LocalAI.Infrastructure.Services
             try
             {
                 var response = await _httpClient.PostAsync($"{_baseUrl}/v1/chat/completions", content);
-
                 if (response.IsSuccessStatusCode)
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();

@@ -28,35 +28,68 @@ namespace LocalAI.Infrastructure.Services
             try
             {
                 var response = await _httpClient.GetAsync($"{_baseUrl}/collections/{collectionName}");
+                Console.WriteLine($"🔍 Collection existence check: HTTP {response.StatusCode}");
 
                 if (response.IsSuccessStatusCode)
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
                     var result = JsonSerializer.Deserialize<JsonElement>(responseContent);
                     var pointsCount = result.GetProperty("result").GetProperty("points_count").GetInt32();
+                    var indexedCount = result.GetProperty("result").GetProperty("indexed_vectors_count").GetInt32();
+
+                    Console.WriteLine($"📊 Collection found: {pointsCount} points, {indexedCount} indexed");
                     return pointsCount > 0;
                 }
 
+                Console.WriteLine("❌ Collection does not exist");
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"❌ Collection check error: {ex.Message}");
                 return false;
             }
         }
 
         public async Task StoreDocumentsAsync(IEnumerable<DocumentChunk> chunks)
         {
-            // Create collection first
-            var collectionPayload = JsonSerializer.Serialize(new
+            // FIXED: Create collection with correct optimization settings
+            if (!await CollectionExistsAsync(_collectionName))
             {
-                vectors = new { size = 768, distance = "Cosine" }
-            });
+                var collectionPayload = JsonSerializer.Serialize(new
+                {
+                    vectors = new { size = 768, distance = "Cosine" },
+                    optimizers_config = new
+                    {
+                        indexing_threshold = 1,
+                        vacuum_min_vector_number = 1,
+                        default_segment_number = 8  // CRITICAL: Match your CPU cores (RTX 5070 Ti system likely has 8+ cores)
+                    },
+                    hnsw_config = new
+                    {
+                        m = 32,                     // Higher m for better accuracy
+                        ef_construct = 200,         // Higher ef_construct for better index quality
+                        full_scan_threshold = 10000 // Restore default threshold
+                    }
+                });
 
-            var createContent = new StringContent(collectionPayload, System.Text.Encoding.UTF8, "application/json");
-            await _httpClient.PutAsync($"{_baseUrl}/collections/{_collectionName}", createContent);
+                var createContent = new StringContent(collectionPayload, System.Text.Encoding.UTF8, "application/json");
+                var createResponse = await _httpClient.PutAsync($"{_baseUrl}/collections/{_collectionName}", createContent);
 
-            // Store points in batches
+                if (!createResponse.IsSuccessStatusCode)
+                {
+                    var errorContent = await createResponse.Content.ReadAsStringAsync();
+                    Console.WriteLine($"❌ Collection creation failed - HTTP {createResponse.StatusCode}: {errorContent}");
+                    Console.WriteLine($"❌ Collection payload: {collectionPayload}");
+                    throw new Exception($"Failed to create collection: HTTP {createResponse.StatusCode} - {errorContent}");
+                }
+                else
+                {
+                    Console.WriteLine($"✅ Collection '{_collectionName}' created successfully with indexing_threshold=500");
+                }
+            }
+
+            // Store documents in batches
             const int batchSize = 100;
             var chunkList = chunks.ToList();
 
@@ -82,8 +115,49 @@ namespace LocalAI.Infrastructure.Services
                 var response = await _httpClient.PutAsync($"{_baseUrl}/collections/{_collectionName}/points", pointsContent);
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new Exception($"Failed to store batch {i / batchSize + 1}");
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"❌ HTTP {response.StatusCode}: {errorContent}");
+                    Console.WriteLine($"❌ Request URL: {_baseUrl}/collections/{_collectionName}/points");
+                    Console.WriteLine($"❌ Payload sample: {pointsPayload.Substring(0, Math.Min(200, pointsPayload.Length))}...");
+                    throw new Exception($"Failed to store batch {i / batchSize + 1}: HTTP {response.StatusCode} - {errorContent}");
                 }
+            }
+
+            // FORCE INDEX BUILD after storing all points
+            try
+            {
+                Console.WriteLine("🔨 Attempting to force index build...");
+                var indexResponse = await _httpClient.PostAsync($"{_baseUrl}/collections/{_collectionName}/index",
+                    new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+
+                Console.WriteLine($"🔨 Index build response: HTTP {indexResponse.StatusCode}");
+
+                if (indexResponse.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("✅ Index build initiated successfully");
+                }
+                else
+                {
+                    var errorContent = await indexResponse.Content.ReadAsStringAsync();
+                    Console.WriteLine($"⚠️ Index build failed: HTTP {indexResponse.StatusCode} - {errorContent}");
+                }
+
+                // Wait for indexing and verify status
+                await Task.Delay(2000);
+
+                var statusResponse = await _httpClient.GetAsync($"{_baseUrl}/collections/{_collectionName}");
+                if (statusResponse.IsSuccessStatusCode)
+                {
+                    var statusContent = await statusResponse.Content.ReadAsStringAsync();
+                    var status = JsonSerializer.Deserialize<JsonElement>(statusContent);
+                    var indexedCount = status.GetProperty("result").GetProperty("indexed_vectors_count").GetInt32();
+                    var totalCount = status.GetProperty("result").GetProperty("points_count").GetInt32();
+                    Console.WriteLine($"📊 Final status: {indexedCount}/{totalCount} vectors indexed");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ Index build error: {ex.Message}");
             }
         }
 
@@ -91,15 +165,22 @@ namespace LocalAI.Infrastructure.Services
         {
             var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, isQuery: true);
 
+            // Use optimized search parameters for speed
             var searchPayload = JsonSerializer.Serialize(new
             {
-                vector = queryEmbedding,
+                query = queryEmbedding,
                 limit = limit,
-                with_payload = true
+                with_payload = true,
+                @params = new
+                {
+                    hnsw_ef = 128,          // HIGHER ef for better performance (not too low!)
+                    exact = false,          // Force HNSW usage
+                    indexed_only = true     // Only search indexed vectors
+                }
             });
 
             var searchContent = new StringContent(searchPayload, System.Text.Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync($"{_baseUrl}/collections/{_collectionName}/points/search", searchContent);
+            var response = await _httpClient.PostAsync($"{_baseUrl}/collections/{_collectionName}/points/query", searchContent);
             var responseContent = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
@@ -108,7 +189,7 @@ namespace LocalAI.Infrastructure.Services
             }
 
             var searchResult = JsonSerializer.Deserialize<JsonElement>(responseContent);
-            var results = searchResult.GetProperty("result").EnumerateArray().ToList();
+            var results = searchResult.GetProperty("result").GetProperty("points").EnumerateArray().ToList();
 
             var searchResults = new List<SearchResult>();
             foreach (var result in results)

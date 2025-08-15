@@ -15,12 +15,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LocalAI.Console", "src\Loca
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
+		.dockerignore = .dockerignore
 		.env = .env
 		.gitignore = .gitignore
+		appsettings.Docker.json = appsettings.Docker.json
 		appsettings.json = appsettings.json
+		docker-compose.infrastructure.yml = docker-compose.infrastructure.yml
 		docker-compose.yml = docker-compose.yml
+		qdrant-config.yaml = qdrant-config.yaml
 		README.md = README.md
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LocalAI.Web", "src\LocalAI.Web\LocalAI.Web.csproj", "{F9053EAB-635B-47BD-A4D4-097EB78AA948}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -80,6 +86,18 @@ Global
 		{CED2D587-581E-45BE-A9CA-BE09612DAF50}.Release|x64.Build.0 = Release|Any CPU
 		{CED2D587-581E-45BE-A9CA-BE09612DAF50}.Release|x86.ActiveCfg = Release|Any CPU
 		{CED2D587-581E-45BE-A9CA-BE09612DAF50}.Release|x86.Build.0 = Release|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Debug|x64.Build.0 = Debug|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Debug|x86.Build.0 = Debug|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Release|x64.ActiveCfg = Release|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Release|x64.Build.0 = Release|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Release|x86.ActiveCfg = Release|Any CPU
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -89,6 +107,7 @@ Global
 		{54011361-C551-42A1-966E-D68C55FEBFE8} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{B08AA82A-1901-45C3-A9AA-877ED1BCA31A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{CED2D587-581E-45BE-A9CA-BE09612DAF50} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{F9053EAB-635B-47BD-A4D4-097EB78AA948} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {746C3992-FFD2-42FD-AC88-79E902743D0C}

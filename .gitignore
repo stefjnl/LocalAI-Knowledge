@@ -362,4 +362,6 @@ FodyWeavers.xsd
 *.msp
 
 # JetBrains Rider
-*.sln.iml   
+*.sln.iml   wwwroot/css/bootstrap/
+wwwroot/lib/
+# Static assets
