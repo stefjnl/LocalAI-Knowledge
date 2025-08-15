@@ -73,6 +73,24 @@ app.MapGet("/api/collection/exists", async (IVectorSearchService vectorSearch) =
     return new { CollectionExists = exists };
 });
 
+app.MapGet("/api/documents/processed", (IDocumentProcessor processor) =>
+{
+    try
+    {
+        var processedFiles = ((DocumentProcessor)processor).GetProcessedFiles();
+        return Results.Ok(new
+        {
+            Success = true,
+            ProcessedFiles = processedFiles,
+            TotalCount = processedFiles.Count
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error retrieving processed files: {ex.Message}");
+    }
+});
+
 app.MapPost("/api/documents/process", async (IDocumentProcessor processor, IVectorSearchService vectorSearch) =>
 {
     try

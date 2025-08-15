@@ -10,6 +10,7 @@ public interface IApiService
     Task<ApiResponse<ProcessDocumentsResponse>> ProcessDocumentsAsync();
     Task<ApiResponse<CollectionStatusResponse>> GetCollectionStatusAsync();
     Task<ApiResponse<UploadDocumentResponse>> UploadDocumentAsync(string fileName, string fileType, byte[] fileContent);
+    Task<ApiResponse<ProcessedDocumentsResponse>> GetProcessedDocumentsAsync();
 }
 
 public class ApiService : IApiService
@@ -140,6 +141,28 @@ public class ApiService : IApiService
             _ => "application/octet-stream"
         };
     }
+
+    public async Task<ApiResponse<ProcessedDocumentsResponse>> GetProcessedDocumentsAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("/api/documents/processed");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ProcessedDocumentsResponse>(content, _jsonOptions);
+                return new ApiResponse<ProcessedDocumentsResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<ProcessedDocumentsResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ProcessedDocumentsResponse> { Success = false, Error = ex.Message };
+        }
+    }
 }
 
 // DTOs matching your API
@@ -177,4 +200,11 @@ public record UploadDocumentResponse
     public bool Success { get; set; }
     public int ChunksProcessed { get; set; }
     public string Message { get; set; } = string.Empty;
+}
+
+public record ProcessedDocumentsResponse
+{
+    public bool Success { get; set; }
+    public string[] ProcessedFiles { get; set; } = Array.Empty<string>();
+    public int TotalCount { get; set; }
 }

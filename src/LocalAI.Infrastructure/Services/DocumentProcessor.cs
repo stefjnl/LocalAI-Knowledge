@@ -12,17 +12,23 @@ namespace LocalAI.Infrastructure.Services
         private readonly IEmbeddingService _embeddingService;
         private readonly string _transcriptsPath;
         private readonly string _pdfsPath;
+        private readonly string _processedFilesPath;
 
         public DocumentProcessor(IEmbeddingService embeddingService, IConfiguration configuration)
         {
             _embeddingService = embeddingService;
             _transcriptsPath = configuration["DocumentPaths:Transcripts"] ?? "data/transcripts/";
             _pdfsPath = configuration["DocumentPaths:PDFs"] ?? "data/pdfs/";
+
+            // Use /tmp directory for processed files to ensure writability in Docker containers
+            var tmpPath = Path.GetTempPath();
+            _processedFilesPath = Path.Combine(tmpPath, "processed_files.json");
         }
 
         public async Task<List<DocumentChunk>> ProcessAllDocumentsAsync()
         {
             var allChunks = new List<DocumentChunk>();
+            var processedFiles = LoadProcessedFiles();
 
             // Process transcripts
             if (Directory.Exists(_transcriptsPath))
@@ -30,8 +36,16 @@ namespace LocalAI.Infrastructure.Services
                 var transcriptFiles = Directory.GetFiles(_transcriptsPath, "*.txt");
                 foreach (var file in transcriptFiles)
                 {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed transcript: {fileName}");
+                        continue;
+                    }
+
                     var chunks = await ProcessTextFileAsync(file);
                     allChunks.AddRange(chunks);
+                    processedFiles.Add(fileName);
                 }
             }
 
@@ -41,10 +55,18 @@ namespace LocalAI.Infrastructure.Services
                 var pdfFiles = Directory.GetFiles(_pdfsPath, "*.pdf", SearchOption.AllDirectories);
                 foreach (var file in pdfFiles)
                 {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed PDF: {fileName}");
+                        continue;
+                    }
+
                     try
                     {
                         var chunks = await ProcessPdfFileAsync(file);
                         allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
                     }
                     catch (Exception ex)
                     {
@@ -54,7 +76,35 @@ namespace LocalAI.Infrastructure.Services
                 }
             }
 
+            SaveProcessedFiles(processedFiles);
             return allChunks;
+        }
+
+        public List<string> GetProcessedFiles()
+        {
+            return LoadProcessedFiles().ToList();
+        }
+
+        private HashSet<string> LoadProcessedFiles()
+        {
+            if (File.Exists(_processedFilesPath))
+            {
+                var json = File.ReadAllText(_processedFilesPath);
+                var files = System.Text.Json.JsonSerializer.Deserialize<HashSet<string>>(json);
+                return files ?? new HashSet<string>();
+            }
+            return new HashSet<string>();
+        }
+
+        private void SaveProcessedFiles(HashSet<string> processedFiles)
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(processedFiles, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var directory = Path.GetDirectoryName(_processedFilesPath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            File.WriteAllText(_processedFilesPath, json);
         }
 
         public async Task<List<DocumentChunk>> ProcessTextFileAsync(string filePath)
@@ -116,7 +166,7 @@ namespace LocalAI.Infrastructure.Services
                     pageBreaks.Add((page.Number, fullText.Length));
 
                     // Use simple page.Text for faster extraction (like old Pdfium approach)
-                    var pageText = ContentOrderTextExtractor.GetText(page); 
+                    var pageText = ContentOrderTextExtractor.GetText(page);
                     pageText = CleanPdfText(pageText);
 
                     if (!string.IsNullOrWhiteSpace(pageText))
