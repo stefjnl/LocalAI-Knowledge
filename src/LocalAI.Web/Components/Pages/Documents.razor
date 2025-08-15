@@ -1,0 +1,374 @@
+@page "/documents"
+@using LocalAI.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.Logging
+@inject IApiService ApiService
+@inject ILogger<Documents> Logger
+@rendermode @(new InteractiveServerRenderMode())
+
+<PageTitle>Document Processing</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+
+            <div class="text-center mb-4">
+                <h1 class="display-5 fw-bold text-primary">📚 Document Processing</h1>
+                <p class="lead text-muted">Process your knowledge base documents for semantic search</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show"
+                    role="alert">
+                    <strong>@(collectionExists ? "✅" : "⚠️")</strong> @statusMessage
+                </div>
+            }
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Process Documents</h5>
+                </div>
+                <div class="card-body">
+                    <p>Process all documents in your data directories to create searchable embeddings.</p>
+                    <p><strong>Current data paths:</strong></p>
+                    <ul>
+                        <li>Transcripts: data/transcripts/</li>
+                        <li>PDFs: data/pdfs/</li>
+                    </ul>
+
+                    <button type="button" class="btn btn-primary" @onclick="ProcessDocuments" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Processing...</span>
+                        }
+                        else
+                        {
+                            <span>🚀 Process All Documents</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Upload New Documents</h5>
+                </div>
+                <div class="card-body">
+                    <p>Upload new documents to be processed and added to your knowledge base.</p>
+
+                    <div class="mb-3">
+                        <label for="documentType" class="form-label">Document Type</label>
+                        <select class="form-select" id="documentType" @bind="selectedDocumentType">
+                            <option value="transcript">Transcript (.txt)</option>
+                            <option value="pdf">PDF Document (.pdf)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="fileUpload" class="form-label">Select File</label>
+                        <InputFile id="fileUpload" class="form-control" accept=".txt,.pdf" OnChange="OnFileSelected" />
+                    </div>
+
+                    <button type="button" class="btn btn-success" @onclick="UploadDocument"
+                        disabled="@(isUploading || selectedFile == null)">
+                        @if (isUploading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Uploading...</span>
+                        }
+                        else
+                        {
+                            <span>📤 Upload and Process Document</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            @if (processedDocuments.Any())
+            {
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Processed Documents</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Document Name</th>
+                                        <th>Type</th>
+                                        <th>Chunks Processed</th>
+                                        <th>Processing Time</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var doc in processedDocuments)
+                                    {
+                                        <tr>
+                                            <td>@doc.Name</td>
+                                            <td>@doc.Type</td>
+                                            <td>@doc.ChunksProcessed</td>
+                                            <td>@doc.ProcessingTime</td>
+                                            <td>
+                                                @if (doc.Success)
+                                                {
+                                                    <span class="badge bg-success">Success</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger">Failed</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (isProcessing)
+            {
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Processing Progress</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="progress mb-3" style="height: 25px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+                                style="width: @progressPercentage%" aria-valuenow="@progressPercentage" aria-valuemin="0"
+                                aria-valuemax="100">
+                                @progressPercentage%
+                            </div>
+                        </div>
+                        <div class="text-center">
+                            <p class="mb-1">@progressMessage</p>
+                            <small class="text-muted">@progressDetails</small>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (processingComplete)
+            {
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">✅ Processing Complete</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.
+                        </p>
+                        <p>Your knowledge base is now ready for semantic search!</p>
+                        <a href="/search" class="btn btn-primary">Start Searching</a>
+                    </div>
+                </div>
+            }
+
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isProcessing = false;
+    private bool isUploading = false;
+    private bool collectionExists = false;
+    private bool processingComplete = false;
+    private string statusMessage = "";
+    private int progressPercentage = 0;
+    private string progressMessage = "Ready to process";
+    private string progressDetails = "";
+    private int processedChunks = 0;
+    private string selectedDocumentType = "transcript";
+    private IBrowserFile? selectedFile;
+    private List<ProcessedDocument> processedDocuments = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("DocumentProcessingPage initialized");
+        await CheckCollectionStatus();
+    }
+
+    private async Task CheckCollectionStatus()
+    {
+        Logger.LogInformation("Checking collection status");
+        try
+        {
+            var response = await ApiService.GetCollectionStatusAsync();
+            if (response.Success && response.Data != null)
+            {
+                collectionExists = response.Data.CollectionExists;
+                statusMessage = collectionExists
+                ? "Knowledge base is ready! You can start searching your documents."
+                : "Knowledge base not found. Process your documents to enable search.";
+                Logger.LogInformation($"Collection status check completed. Collection exists: {collectionExists}");
+            }
+            else
+            {
+                statusMessage = "Unable to check knowledge base status. Make sure the API is running.";
+                Logger.LogWarning("Failed to get collection status: {0}", response.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error checking status: {ex.Message}";
+            Logger.LogError(ex, "Error checking collection status");
+        }
+    }
+
+    private async Task ProcessDocuments()
+    {
+        Logger.LogInformation("Starting document processing");
+        isProcessing = true;
+        processingComplete = false;
+        progressPercentage = 0;
+        progressMessage = "Starting document processing...";
+        progressDetails = "Initializing services";
+        processedChunks = 0;
+        statusMessage = "";
+
+        try
+        {
+            Logger.LogInformation("Calling API to process documents");
+            var response = await ApiService.ProcessDocumentsAsync();
+            Logger.LogInformation("Received API response for document processing");
+            if (response.Success && response.Data != null)
+            {
+                processedChunks = response.Data.ChunksProcessed;
+                processingComplete = true;
+                collectionExists = true;
+                statusMessage = response.Data.Message;
+                progressMessage = "Processing complete!";
+                progressDetails = $"Processed {processedChunks} document chunks";
+                progressPercentage = 100;
+                Logger.LogInformation($"Document processing completed successfully. Processed {processedChunks} chunks");
+
+                // Add to processed documents list
+                processedDocuments.Add(new ProcessedDocument
+                {
+                    Name = "All Documents",
+                    Type = "Batch",
+                    ChunksProcessed = response.Data.ChunksProcessed,
+                    ProcessingTime = DateTime.Now.ToString("HH:mm:ss"),
+                    Success = true
+                });
+            }
+            else
+            {
+                statusMessage = $"Error: {response.Error}";
+                Logger.LogWarning("Document processing failed: {0}", response.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+            Logger.LogError(ex, "Unexpected error during document processing");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+    }
+
+    private async Task UploadDocument()
+    {
+        Logger.LogInformation("Starting document upload for {0}", selectedFile?.Name);
+        if (selectedFile == null)
+        {
+            Logger.LogWarning("Attempted to upload null file");
+            return;
+        }
+
+        isUploading = true;
+        statusMessage = "";
+
+        try
+        {
+            Logger.LogInformation("Selected file: {0} ({1} bytes)", selectedFile.Name, selectedFile.Size);
+            Logger.LogInformation("File type: {0}", selectedDocumentType);
+
+            // Read the file content
+            using var stream = selectedFile.OpenReadStream(10_000_000); // 10MB limit
+            Logger.LogInformation("Reading file content...");
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var fileContent = memoryStream.ToArray();
+            Logger.LogInformation("File read completed. Size: {0} bytes", fileContent.Length);
+
+            // Call the API to upload and process the document
+            Logger.LogInformation("Calling API to upload document");
+            var response = await ApiService.UploadDocumentAsync(selectedFile.Name, selectedDocumentType, fileContent);
+            Logger.LogInformation("Received API response for document upload");
+
+            if (response.Success && response.Data != null)
+            {
+                statusMessage = $"✅ {response.Data.Message} ({response.Data.ChunksProcessed} chunks processed)";
+                Logger.LogInformation("Document upload completed successfully. Processed {0} chunks", response.Data.ChunksProcessed);
+
+                // Add to processed documents list
+                processedDocuments.Add(new ProcessedDocument
+                {
+                    Name = selectedFile.Name,
+                    Type = selectedDocumentType,
+                    ChunksProcessed = response.Data.ChunksProcessed,
+                    ProcessingTime = DateTime.Now.ToString("HH:mm:ss"),
+                    Success = true
+                });
+
+                selectedFile = null;
+            }
+            else
+            {
+                statusMessage = $"Error uploading document: {response.Error}";
+                Logger.LogWarning("Document upload failed: {0}", response.Error);
+
+                // Add to processed documents list with error status
+                processedDocuments.Add(new ProcessedDocument
+                {
+                    Name = selectedFile.Name,
+                    Type = selectedDocumentType,
+                    ChunksProcessed = 0,
+                    ProcessingTime = DateTime.Now.ToString("HH:mm:ss"),
+                    Success = false
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error uploading document: {ex.Message}";
+            Logger.LogError(ex, "Error uploading document {0}", selectedFile?.Name);
+
+            // Add to processed documents list with error status
+            processedDocuments.Add(new ProcessedDocument
+            {
+                Name = selectedFile?.Name ?? "Unknown",
+                Type = selectedDocumentType,
+                ChunksProcessed = 0,
+                ProcessingTime = DateTime.Now.ToString("HH:mm:ss"),
+                Success = false
+            });
+        }
+        finally
+        {
+            isUploading = false;
+            Logger.LogInformation("Document upload process completed");
+        }
+    }
+
+    public class ProcessedDocument
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public int ChunksProcessed { get; set; }
+        public string ProcessingTime { get; set; } = string.Empty;
+        public bool Success { get; set; }
+    }
+}

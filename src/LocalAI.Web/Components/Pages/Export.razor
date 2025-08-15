@@ -1,0 +1,162 @@
+@page "/export"
+@using LocalAI.Web.Services
+@using LocalAI.Core.Models
+@inject IApiService ApiService
+
+<PageTitle>Export</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+
+            <div class="text-center mb-4">
+                <h1 class="display-5 fw-bold text-primary">📤 Export Knowledge</h1>
+                <p class="lead text-muted">Save your search results and knowledge reports</p>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Export Options</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="exportFormat" class="form-label">Export Format</label>
+                        <select class="form-select" id="exportFormat" @bind="selectedFormat">
+                            <option value="json">JSON</option>
+                            <option value="csv">CSV</option>
+                            <option value="txt">Plain Text</option>
+                            <option value="md">Markdown</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="exportType" class="form-label">Export Type</label>
+                        <select class="form-select" id="exportType" @bind="selectedType">
+                            <option value="current">Current Search Results</option>
+                            <option value="all">All Knowledge Base</option>
+                            <option value="summary">Knowledge Summary Report</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary" @onclick="ExportData" disabled="@isExporting">
+                        @if (isExporting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Exporting...</span>
+                        }
+                        else
+                        {
+                            <span>📥 Export Data</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(exportMessage))
+            {
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    @exportMessage
+                    <button type="button" class="btn-close" @onclick="() => exportMessage = null"></button>
+                </div>
+            }
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Recent Exports</h5>
+                </div>
+                <div class="card-body">
+                    @if (recentExports.Any())
+                    {
+                        <div class="list-group">
+                            @foreach (var export in recentExports)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1">@export.FileName</h6>
+                                        <small class="text-muted">@export.Timestamp.ToString("g")</small>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => DownloadExport(export)">
+                                        Download
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">No recent exports found.</p>
+                    }
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@code {
+    private string selectedFormat = "json";
+    private string selectedType = "current";
+    private bool isExporting = false;
+    private string? exportMessage;
+    private List<ExportItem> recentExports = new();
+
+    public class ExportItem
+    {
+        public string FileName { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load recent exports from local storage or server
+        await LoadRecentExports();
+    }
+
+    private async Task LoadRecentExports()
+    {
+        // In a real implementation, this would load from local storage or server
+        // For now, we'll just show some sample data
+        recentExports = new List<ExportItem>
+{
+new ExportItem { FileName = "knowledge-export-2025-08-15.json", Timestamp = DateTime.Now.AddDays(-1) },
+new ExportItem { FileName = "search-results-2025-08-14.csv", Timestamp = DateTime.Now.AddDays(-2) }
+};
+    }
+
+    private async Task ExportData()
+    {
+        isExporting = true;
+        exportMessage = null;
+
+        try
+        {
+            // In a real implementation, this would call the API to generate the export
+            // For now, we'll simulate the process
+            await Task.Delay(2000);
+
+            // Add to recent exports
+            var newExport = new ExportItem
+            {
+                FileName = $"export-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.{selectedFormat}",
+                Timestamp = DateTime.Now
+            };
+            recentExports.Insert(0, newExport);
+
+            exportMessage = $"Export completed successfully: {newExport.FileName}";
+        }
+        catch (Exception ex)
+        {
+            exportMessage = $"Export failed: {ex.Message}";
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private void DownloadExport(ExportItem export)
+    {
+        // In a real implementation, this would download the actual file
+        exportMessage = $"Downloading {export.FileName}...";
+    }
+}

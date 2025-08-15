@@ -1,0 +1,89 @@
+@page "/settings"
+@using LocalAI.Web.Services
+@inject IApiService ApiService
+
+<PageTitle>Settings</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+
+            <div class="text-center mb-4">
+                <h1 class="display-5 fw-bold text-primary">⚙️ Settings</h1>
+                <p class="lead text-muted">Configure your Local AI Knowledge Assistant</p>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">System Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form>
+                        <div class="mb-3">
+                            <label for="apiUrl" class="form-label">API Base URL</label>
+                            <input type="text" class="form-control" id="apiUrl" value="http://localhost:5000" disabled>
+                            <div class="form-text">The base URL for the LocalAI API service</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="embeddingModel" class="form-label">Embedding Model</label>
+                            <input type="text" class="form-control" id="embeddingModel"
+                                value="text-embedding-nomic-embed-text-v2-moe" disabled>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="chatModel" class="form-label">Chat Model</label>
+                            <input type="text" class="form-control" id="chatModel" value="qwen2.5-coder-7b-instruct"
+                                disabled>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="vectorDb" class="form-label">Vector Database</label>
+                            <input type="text" class="form-control" id="vectorDb" value="Qdrant (localhost:6333)"
+                                disabled>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Document Paths</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="transcriptsPath" class="form-label">Transcripts Directory</label>
+                        <input type="text" class="form-control" id="transcriptsPath" value="data/transcripts/" disabled>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="pdfsPath" class="form-label">PDFs Directory</label>
+                        <input type="text" class="form-control" id="pdfsPath" value="data/pdfs/" disabled>
+                        <div class="form-text">Subdirectories will be processed recursively</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">System Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Hardware:</strong> RTX 5070 Ti System</p>
+                            <p><strong>Framework:</strong> .NET 9.0</p>
+                            <p><strong>Architecture:</strong> Clean Architecture</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Search Performance:</strong> ~2 seconds (system limitation)</p>
+                            <p><strong>LLM Response:</strong> ~3-4 seconds (optimized)</p>
+                            <p><strong>Total Query Time:</strong> ~5-6 seconds</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
