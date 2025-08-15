@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using LocalAI.Core.Interfaces;
+using LocalAI.Core.Models;
 using Microsoft.Extensions.Configuration;
 
 namespace LocalAI.Infrastructure.Services
@@ -14,7 +15,7 @@ namespace LocalAI.Infrastructure.Services
         {
             _httpClient = httpClient;
             _baseUrl = configuration["EmbeddingService:BaseUrl"] ?? "http://localhost:1234";
-            _model = configuration["EmbeddingService:Model"] ?? "qwen2.5-coder-7b-instruct";
+            _model = configuration["EmbeddingService:Model"] ?? LocalAI.Core.Models.Constants.DefaultChatModel;
         }
 
         public async Task<float[]> GenerateEmbeddingAsync(string text, bool isQuery = false)

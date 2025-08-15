@@ -16,7 +16,7 @@ namespace LocalAI.Infrastructure.Services
         {
             _httpClient = httpClient;
             _baseUrl = configuration["RAGService:BaseUrl"] ?? "http://localhost:1234";
-            _model = "qwen2.5-coder-7b-instruct";
+            _model = configuration["RAGService:Model"] ?? LocalAI.Core.Models.Constants.DefaultChatModel;
         }
 
         public async Task<string> GenerateResponseAsync(string query, List<SearchResult> searchResults)
@@ -57,7 +57,7 @@ namespace LocalAI.Infrastructure.Services
 
                 Answer based strictly on the provided knowledge sources. If the sources don't contain enough information for a complete answer, acknowledge this and work with what's available.";
 
-                            var userPrompt = $@"Based on the following knowledge sources, provide a comprehensive answer to the user's question:
+            var userPrompt = $@"Based on the following knowledge sources, provide a comprehensive answer to the user's question:
 
                 KNOWLEDGE SOURCES:
                 {contextBuilder}
@@ -66,11 +66,11 @@ namespace LocalAI.Infrastructure.Services
 
                 Provide a thorough, well-structured response that addresses the question completely while staying true to the source material.";
 
-                            var payload = JsonSerializer.Serialize(new
-                            {
-                                model = _model,
-                                messages = new[]
-                                {
+            var payload = JsonSerializer.Serialize(new
+            {
+                model = _model,
+                messages = new[]
+                {
                         new { role = "system", content = systemPrompt },
                         new { role = "user", content = userPrompt }
                     },

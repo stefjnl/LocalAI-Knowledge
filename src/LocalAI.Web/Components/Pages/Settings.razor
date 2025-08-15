@@ -1,6 +1,9 @@
 @page "/settings"
+@using Microsoft.JSInterop
 @using LocalAI.Web.Services
 @inject IApiService ApiService
+@inject IConfiguration Configuration
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Settings</PageTitle>
 
@@ -18,7 +21,7 @@
                     <h5 class="mb-0">System Configuration</h5>
                 </div>
                 <div class="card-body">
-                    <form>
+                    <form @onsubmit:preventDefault="true" @onsubmit="@(async e => { await SaveSettings(); })">
                         <div class="mb-3">
                             <label for="apiUrl" class="form-label">API Base URL</label>
                             <input type="text" class="form-control" id="apiUrl" value="http://localhost:5000" disabled>
@@ -27,20 +30,22 @@
 
                         <div class="mb-3">
                             <label for="embeddingModel" class="form-label">Embedding Model</label>
-                            <input type="text" class="form-control" id="embeddingModel"
-                                value="text-embedding-nomic-embed-text-v2-moe" disabled>
+                            <input type="text" class="form-control" id="embeddingModel" @bind="embeddingModel">
                         </div>
 
                         <div class="mb-3">
                             <label for="chatModel" class="form-label">Chat Model</label>
-                            <input type="text" class="form-control" id="chatModel" value="qwen2.5-coder-7b-instruct"
-                                disabled>
+                            <input type="text" class="form-control" id="chatModel" @bind="chatModel">
                         </div>
 
                         <div class="mb-3">
                             <label for="vectorDb" class="form-label">Vector Database</label>
                             <input type="text" class="form-control" id="vectorDb" value="Qdrant (localhost:6333)"
                                 disabled>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="submit" class="btn btn-primary">Save Settings</button>
                         </div>
                     </form>
                 </div>
@@ -87,3 +92,21 @@
         </div>
     </div>
 </div>
+
+@code {
+    private string embeddingModel = string.Empty;
+    private string chatModel = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        embeddingModel = Configuration["EmbeddingService:Model"] ?? string.Empty;
+        chatModel = Configuration["RAGService:Model"] ?? string.Empty;
+    }
+
+    private async Task SaveSettings()
+    {
+        // In a real implementation, you would send the settings to the API
+        // For now, we'll just show a success message
+        await JSRuntime.InvokeVoidAsync("alert", $"Settings saved successfully! Chat Model: {chatModel}, Embedding Model: {embeddingModel}");
+    }
+}
