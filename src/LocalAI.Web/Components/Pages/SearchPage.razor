@@ -20,11 +20,13 @@
 
             @if (!string.IsNullOrEmpty(statusMessage))
             {
-                <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show" role="alert">
+                <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show"
+                    role="alert">
                     <strong>@(collectionExists ? "✅" : "⚠️")</strong> @statusMessage
                     @if (!collectionExists)
                     {
-                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" @onclick="ProcessDocuments" disabled="@isProcessing">
+                        <button type="button" class="btn btn-sm btn-outline-primary ms-3" @onclick="ProcessDocuments"
+                            disabled="@isProcessing">
                             @if (isProcessing)
                             {
                                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -44,11 +46,10 @@
                     <div class="input-group input-group-lg">
                         <span class="input-group-text bg-light border-end-0">🔍</span>
                         <input type="text" class="form-control border-start-0 ps-0"
-                               placeholder="Ask anything about your knowledge base..."
-                               @bind="searchQuery"
-                               @onkeypress="OnKeyPress"
-                               disabled="@isSearching" />
-                        <button class="btn btn-primary px-4" type="button" @onclick="PerformSearch" disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
+                            placeholder="Ask anything about your knowledge base..." @bind="searchQuery"
+                            @onkeypress="OnKeyPress" disabled="@isSearching" />
+                        <button class="btn btn-primary px-4" type="button" @onclick="PerformSearch"
+                            disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
                             @if (isSearching)
                             {
                                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -73,8 +74,16 @@
             @if (searchResponse != null)
             {
                 <div class="card shadow-sm border-0">
-                    <div class="card-header bg-primary text-white">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">AI Response for: "@searchResponse.Query"</h5>
+                        <div>
+                            <button class="btn btn-sm btn-light me-2" @onclick="ToggleExportPanel">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                            <button class="btn btn-sm btn-light" @onclick="ToggleHistoryPanel">
+                                <i class="fas fa-history"></i> History
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
 
@@ -115,15 +124,105 @@
                                                     {
                                                         <small class="text-muted d-block mb-2">@source.PageInfo</small>
                                                     }
-                                                    <p class="card-text small text-muted">
-                                                        @TruncateContent(source.Content, 150)
-                                                    </p>
+                                                    <div class="card-text small text-muted position-relative">
+                                                        @if (expandedSources.Contains(source.GetHashCode()))
+                                                        {
+                                                            <span>@source.Content</span>
+                                                            <button class="btn btn-sm btn-link p-0 ms-2"
+                                                                @onclick="() => ToggleSourceExpansion(source)">
+                                                                Show less
+                                                            </button>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>@TruncateContent(source.Content, 150)</span>
+                                                            @if (source.Content.Length > 150)
+                                                            {
+                                                                <button class="btn btn-sm btn-link p-0 ms-2"
+                                                                    @onclick="() => ToggleSourceExpansion(source)">
+                                                                    Show more
+                                                                </button>
+                                                            }
+                                                        }
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     }
                                 </div>
                             </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Export Panel -->
+            @if (showExportPanel && searchResponse != null)
+            {
+                <div class="card shadow-sm border-0 mt-4">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">Export Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Export Format</label>
+                            <div>
+                                <button class="btn btn-outline-primary me-2" @onclick="() => ExportResults('txt')">
+                                    <i class="fas fa-file-alt"></i> Text (.txt)
+                                </button>
+                                <button class="btn btn-outline-primary me-2" @onclick="() => ExportResults('md')">
+                                    <i class="fab fa-markdown"></i> Markdown (.md)
+                                </button>
+                                <button class="btn btn-outline-primary" @onclick="() => ExportResults('pdf')">
+                                    <i class="fas fa-file-pdf"></i> PDF (.pdf)
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" @bind="includeSources" id="includeSources">
+                            <label class="form-check-label" for="includeSources">
+                                Include source documents
+                            </label>
+                        </div>
+                        <button class="btn btn-secondary" @onclick="ToggleExportPanel">Close</button>
+                    </div>
+                </div>
+            }
+
+            <!-- History Panel -->
+            @if (showHistoryPanel)
+            {
+                <div class="card shadow-sm border-0 mt-4">
+                    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Query History</h5>
+                        <button class="btn btn-sm btn-light" @onclick="ClearHistory">
+                            <i class="fas fa-trash"></i> Clear
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        @if (queryHistory.Any())
+                        {
+                            <ul class="list-group">
+                                @for (int i = 0; i < queryHistory.Count; i++)
+                                {
+                                    var query = queryHistory[i];
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span>@query</span>
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => ReuseQuery(query)">
+                                                <i class="fas fa-sync"></i> Reuse
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success" @onclick="() => BookmarkQuery(query)">
+                                                <i class="fas fa-bookmark"></i> Bookmark
+                                            </button>
+                                        </div>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No query history yet.</p>
                         }
                     </div>
                 </div>
@@ -142,9 +241,18 @@
     private string searchError = "";
     private SearchResponse? searchResponse;
 
+    // New state for UI enhancements
+    private HashSet<int> expandedSources = new HashSet<int>();
+    private bool showExportPanel = false;
+    private bool showHistoryPanel = false;
+    private bool includeSources = true;
+    private List<string> queryHistory = new List<string>();
+
     protected override async Task OnInitializedAsync()
     {
         await CheckCollectionStatus();
+        // Load query history from localStorage if available
+        LoadQueryHistory();
     }
 
     private async Task CheckCollectionStatus()
@@ -156,8 +264,8 @@
             {
                 collectionExists = response.Data.CollectionExists;
                 statusMessage = collectionExists
-                    ? "Knowledge base is ready! You can start searching your documents."
-                    : "Knowledge base not found. Process your documents first to enable search.";
+                ? "Knowledge base is ready! You can start searching your documents."
+                : "Knowledge base not found. Process your documents first to enable search.";
             }
             else
             {
@@ -208,6 +316,9 @@
         searchError = "";
         searchResponse = null;
 
+        // Add to query history
+        AddToQueryHistory(searchQuery);
+
         try
         {
             var response = await ApiService.SearchAsync(searchQuery.Trim());
@@ -254,5 +365,114 @@
             return content;
 
         return content.Substring(0, maxLength) + "...";
+    }
+
+    // New methods for UI enhancements
+    private void ToggleSourceExpansion(SearchResult source)
+    {
+        var key = source.GetHashCode();
+        if (expandedSources.Contains(key))
+        {
+            expandedSources.Remove(key);
+        }
+        else
+        {
+            expandedSources.Add(key);
+        }
+    }
+
+    private void ToggleExportPanel()
+    {
+        showExportPanel = !showExportPanel;
+        if (showHistoryPanel && showExportPanel)
+        {
+            showHistoryPanel = false;
+        }
+    }
+
+    private void ToggleHistoryPanel()
+    {
+        showHistoryPanel = !showHistoryPanel;
+        if (showHistoryPanel && showExportPanel)
+        {
+            showExportPanel = false;
+        }
+    }
+
+    private async Task ExportResults(string format)
+    {
+        if (searchResponse == null) return;
+
+        var fileName = $"knowledge_export_{DateTime.Now:yyyyMMdd_HHmmss}.{format}";
+        var content = GenerateExportContent(format);
+
+        // In a real implementation, you would download the file
+        // For now, we'll just show an alert
+        await JS.InvokeVoidAsync("alert", $"Exporting {fileName}...");
+    }
+
+    private string GenerateExportContent(string format)
+    {
+        if (searchResponse == null) return "";
+
+        var content = $"# Knowledge Base Search Results\n\n";
+        content += $"**Query:** {searchResponse.Query}\n\n";
+        content += $"**AI Response:**\n{searchResponse.RAGResponse}\n\n";
+
+        if (includeSources && searchResponse.Sources?.Any() == true)
+        {
+            content += "## Sources\n\n";
+            foreach (var source in searchResponse.Sources)
+            {
+                content += $"### {GetSourceName(source.Source)}";
+                if (!string.IsNullOrEmpty(source.PageInfo))
+                {
+                    content += $" ({source.PageInfo})";
+                }
+                content += $"\n**Relevance:** {((int)(source.Score * 100)).ToString()}%\n\n";
+                content += $"{source.Content}\n\n";
+            }
+        }
+
+        return content;
+    }
+
+    private void AddToQueryHistory(string query)
+    {
+        if (!queryHistory.Contains(query))
+        {
+            queryHistory.Insert(0, query);
+            if (queryHistory.Count > 20) // Keep only last 20 queries
+            {
+                queryHistory.RemoveAt(queryHistory.Count - 1);
+            }
+            // In a real implementation, you would save to localStorage
+        }
+    }
+
+    private void LoadQueryHistory()
+    {
+        // In a real implementation, you would load from localStorage
+        // For now, we'll initialize with an empty list
+        queryHistory = new List<string>();
+    }
+
+    private void ReuseQuery(string query)
+    {
+        searchQuery = query;
+        showHistoryPanel = false;
+    }
+
+    private void BookmarkQuery(string query)
+    {
+        // In a real implementation, you would save bookmarks
+        // For now, we'll just show an alert
+        JS.InvokeVoidAsync("alert", $"Bookmarked: {query}");
+    }
+
+    private void ClearHistory()
+    {
+        queryHistory.Clear();
+        // In a real implementation, you would also clear localStorage
     }
 }

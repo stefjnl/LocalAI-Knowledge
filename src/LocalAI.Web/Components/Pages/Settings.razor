@@ -1,0 +1,73 @@
+@page "/settings"
+
+<PageTitle>Settings</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="text-center mb-4">
+                <h1 class="display-5 fw-bold text-primary">⚙️ System Settings</h1>
+                <p class="lead text-muted">Configure your LocalAI Knowledge Assistant</p>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">API Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="apiUrl" class="form-label">API Base URL</label>
+                        <input type="text" class="form-control" id="apiUrl" value="http://localhost:8080" disabled>
+                        <div class="form-text">The base URL for the LocalAI API service</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Model Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="embeddingModel" class="form-label">Embedding Model</label>
+                        <input type="text" class="form-control" id="embeddingModel"
+                            value="text-embedding-nomic-embed-text-v2-moe" disabled>
+                        <div class="form-text">The model used for generating document embeddings</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="chatModel" class="form-label">Chat Model</label>
+                        <input type="text" class="form-control" id="chatModel" value="qwen2.5-coder-7b-instruct"
+                            disabled>
+                        <div class="form-text">The model used for generating chat responses</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">System Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Hardware</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>GPU:</strong> RTX 5070 Ti</li>
+                                <li><strong>Memory:</strong> 64GB RAM</li>
+                                <li><strong>Storage:</strong> 2TB NVMe SSD</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Software</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>OS:</strong> Windows 11</li>
+                                <li><strong>.NET:</strong> 9.0</li>
+                                <li><strong>Qdrant:</strong> v1.9.2</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

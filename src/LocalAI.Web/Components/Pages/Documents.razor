@@ -1,0 +1,161 @@
+@page "/documents"
+@using LocalAI.Web.Services
+@inject IApiService ApiService
+
+<PageTitle>Documents</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="text-center mb-4">
+                <h1 class="display-5 fw-bold text-primary">📚 Document Management</h1>
+                <p class="lead text-muted">Manage your knowledge base documents</p>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Document Processing</h5>
+                    <button class="btn btn-light" @onclick="ProcessDocuments" disabled="@isProcessing">
+                        @if (isProcessing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Processing...</span>
+                        }
+                        else
+                        {
+                            <span>📚 Process Documents</span>
+                        }
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                        <div class="alert @(processingSuccess ? "alert-success" : "alert-info") alert-dismissible fade show"
+                            role="alert">
+                            <strong>@(processingSuccess ? "✅" : "ℹ️")</strong> @statusMessage
+                        </div>
+                    }
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card bg-light h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">Transcripts</h5>
+                                    <p class="card-text">Text files in the transcripts directory</p>
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-file-alt fa-2x text-primary me-3"></i>
+                                        <div>
+                                            <h4 class="mb-0">@transcriptCount</h4>
+                                            <small class="text-muted">files found</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">PDF Documents</h5>
+                                    <p class="card-text">PDF files in the pdfs directory</p>
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-file-pdf fa-2x text-danger me-3"></i>
+                                        <div>
+                                            <h4 class="mb-0">@pdfCount</h4>
+                                            <small class="text-muted">files found</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Knowledge Base Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-database fa-2x text-info me-3"></i>
+                        <div>
+                            <h4 class="mb-0">@chunkCount</h4>
+                            <small class="text-muted">document chunks indexed</small>
+                        </div>
+                    </div>
+                    @if (chunkCount > 0)
+                    {
+                        <div class="mt-3">
+                            <div class="progress">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: 100%"></div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-2">
+                                <small class="text-muted">Storage: @storageSize</small>
+                                <small class="text-muted">Vectors: @chunkCount</small>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isProcessing = false;
+    private bool processingSuccess = false;
+    private string statusMessage = "";
+    private int transcriptCount = 0;
+    private int pdfCount = 0;
+    private int chunkCount = 0;
+    private string storageSize = "0 MB";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDocumentStats();
+    }
+
+    private async Task LoadDocumentStats()
+    {
+        // In a real implementation, you would get these stats from the API
+        // For now, we'll use placeholder values
+        transcriptCount = 5;
+        pdfCount = 12;
+        chunkCount = 2098;
+        storageSize = "45.2 MB";
+    }
+
+    private async Task ProcessDocuments()
+    {
+        isProcessing = true;
+        processingSuccess = false;
+        statusMessage = "";
+
+        try
+        {
+            var response = await ApiService.ProcessDocumentsAsync();
+            if (response.Success && response.Data != null)
+            {
+                statusMessage = response.Data.Message;
+                if (response.Data.Success)
+                {
+                    processingSuccess = true;
+                    // Refresh stats
+                    await LoadDocumentStats();
+                }
+            }
+            else
+            {
+                statusMessage = $"Error processing documents: {response.Error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}
