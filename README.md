@@ -1,6 +1,6 @@
 # LocalAI Knowledge Assistant
 
-A comprehensive personal AI knowledge assistant that transforms your accumulated digital knowledge into an intelligent, searchable system using local LLM hardware for complete privacy and control.
+A comprehensive personal AI knowledge assistant that transforms accumulated digital knowledge into an intelligent, searchable system using local LLM hardware for complete privacy and control.
 
 ## ?? Project Vision
 

@@ -1,16 +1,41 @@
+# docker-compose.yml - Application services (can be restarted safely)
 version: '3.8'
 
 services:
-  qdrant:
-    image: qdrant/qdrant:latest
+  localai-api:
+    build:
+      context: ./src/LocalAI.Api
+      dockerfile: Dockerfile
+    container_name: localai-api
     ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_storage:/qdrant/storage
+      - "7190:8080"
     environment:
-      - QDRANT__SERVICE__HTTP_PORT=6333
-      - QDRANT__SERVICE__GRPC_PORT=6334
+      # Connect to external Qdrant service
+      - QdrantSettings__Endpoint=http://qdrant-persistent:6333
+      - LMStudioSettings__Endpoint=http://host.docker.internal:1234
+    volumes:
+      - ./appsettings.json:/app/appsettings.json:ro
+      - ./data:/app/data:ro
+    restart: unless-stopped
+    networks:
+      - localai-network
 
-volumes:
-  qdrant_storage:
+  localai-web:
+    build:
+      context: ./src/LocalAI.Web
+      dockerfile: Dockerfile
+    container_name: localai-web
+    ports:
+      - "7001:8080"
+    environment:
+      - ApiSettings__BaseUrl=http://localai-api:8080
+    depends_on:
+      - localai-api
+    restart: unless-stopped
+    networks:
+      - localai-network
+
+# Use external network created by infrastructure
+networks:
+  localai-network:
+    external: true

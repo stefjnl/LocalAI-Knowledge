@@ -14,7 +14,7 @@ namespace LocalAI.Infrastructure.Services
         {
             _httpClient = httpClient;
             _baseUrl = configuration["EmbeddingService:BaseUrl"] ?? "http://localhost:1234";
-            _model = configuration["EmbeddingService:Model"] ?? "text-embedding-nomic-embed-text-v2-moe";
+            _model = configuration["EmbeddingService:Model"] ?? "qwen2.5-coder-7b-instruct";
         }
 
         public async Task<float[]> GenerateEmbeddingAsync(string text, bool isQuery = false)

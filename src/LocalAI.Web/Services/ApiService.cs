@@ -18,7 +18,7 @@ public class ApiService : IApiService
     public ApiService(HttpClient httpClient, IConfiguration configuration)
     {
         _httpClient = httpClient;
-        _httpClient.BaseAddress = new Uri(configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7190");
+        _httpClient.BaseAddress = new Uri(configuration["ApiSettings:BaseUrl"] ?? "http://localai-api:8080");   
 
         _jsonOptions = new JsonSerializerOptions
         {

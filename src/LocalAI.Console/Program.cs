@@ -3,6 +3,7 @@ using LocalAI.Core.Interfaces;
 using LocalAI.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Diagnostics;
 
 // Load environment variables
 Env.Load();
@@ -33,10 +34,49 @@ services.AddScoped<IDisplayService, DisplayService>();
 // Build service provider
 var serviceProvider = services.BuildServiceProvider();
 
-// Create directories
-Directory.CreateDirectory("data/transcripts");
-Directory.CreateDirectory("data/pdfs");
-Directory.CreateDirectory("data/pdfs/llms");
+// Create directories from configuration
+var transcriptsPath = configuration["DocumentPaths:Transcripts"];
+var pdfsPath = configuration["DocumentPaths:PDFs"];
+
+Directory.CreateDirectory(transcriptsPath);
+Directory.CreateDirectory(pdfsPath);
+Directory.CreateDirectory(Path.Combine(pdfsPath, "llms"));
+
+// Helper methods for enhanced logging
+void LogProgress(string message)
+{
+    Console.ForegroundColor = ConsoleColor.Cyan;
+    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
+    Console.ResetColor();
+}
+
+void LogSuccess(string message)
+{
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ✅ {message}");
+    Console.ResetColor();
+}
+
+void LogWarning(string message)
+{
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ {message}");
+    Console.ResetColor();
+}
+
+void LogError(string message)
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ❌ {message}");
+    Console.ResetColor();
+}
+
+void LogFileCount(string fileType, int count)
+{
+    Console.ForegroundColor = ConsoleColor.White;
+    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 📁 Found {count} {fileType} files");
+    Console.ResetColor();
+}
 
 try
 {
@@ -45,74 +85,153 @@ try
     var documentProcessor = serviceProvider.GetRequiredService<IDocumentProcessor>();
     var ragService = serviceProvider.GetRequiredService<IRAGService>();
 
-    displayService.DisplayProgress("🚀 Starting knowledge processing pipeline...");
+    LogProgress("🚀 Starting LocalAI Knowledge Processing Pipeline");
+    LogProgress("================================================");
 
-    // Check if collection already exists and has data
-    if (await vectorSearchService.CollectionExistsAsync("knowledge"))
+    // Check available files before processing (from configuration)
+    // Debug logging
+    LogProgress($"Transcripts path from config: '{transcriptsPath}'");
+    LogProgress($"PDFs path from config: '{pdfsPath}'");
+    LogProgress($"Current directory: {Directory.GetCurrentDirectory()}");
+
+    if (string.IsNullOrEmpty(transcriptsPath) || string.IsNullOrEmpty(pdfsPath))
     {
-        displayService.DisplayProgress("✅ Knowledge base already exists, skipping processing");
-        displayService.DisplayProgress("🔍 Ready for interactive search!");
-        displayService.DisplayProgress("Ask questions about your documents (or 'quit' to exit):");
+        LogError("DocumentPaths configuration is missing or empty!");
+        return;
     }
-    else
+
+    var transcriptFiles = Directory.GetFiles(transcriptsPath, "*.txt", SearchOption.AllDirectories);
+    var pdfFiles = Directory.GetFiles(pdfsPath, "*.pdf", SearchOption.AllDirectories);
+
+    LogFileCount("transcript (.txt)", transcriptFiles.Length);
+    LogFileCount("PDF", pdfFiles.Length);
+
+    if (transcriptFiles.Length == 0 && pdfFiles.Length == 0)
     {
-        displayService.DisplayProgress("📚 Processing all documents for the first time...");
+        LogWarning("No files found to process in data/transcripts or data/pdfs directories");
+        LogProgress("Please add some .txt or .pdf files and try again");
+        return;
+    }
 
-        var allChunks = await documentProcessor.ProcessAllDocumentsAsync();
+    // Test Qdrant connection
+    LogProgress("🔍 Testing Qdrant connection...");
+    var stopwatch = Stopwatch.StartNew();
 
-        if (allChunks.Count > 0)
+    try
+    {
+        var collectionExists = await vectorSearchService.CollectionExistsAsync("knowledge");
+        stopwatch.Stop();
+        LogSuccess($"Qdrant connection successful ({stopwatch.ElapsedMilliseconds}ms)");
+
+        if (collectionExists)
         {
-            displayService.DisplayProgress($"💾 Storing {allChunks.Count} total chunks in vector database...");
-            await vectorSearchService.StoreDocumentsAsync(allChunks);
-            displayService.DisplayProgress($"✅ Stored {allChunks.Count} documents successfully");
+            LogSuccess("Knowledge base collection 'knowledge' already exists");
+            LogProgress("Checking if processing is needed...");
+
+            // You could add a check here for document count if needed
+            LogProgress("✅ Knowledge base ready - skipping to search mode");
+            LogProgress("🔍 Ready for interactive search!");
+            LogProgress("Ask questions about your documents (or 'quit' to exit):");
         }
         else
         {
-            displayService.DisplayError("No documents found to process");
-            return;
-        }
+            LogProgress("📚 Knowledge base collection not found - starting fresh processing");
+            LogProgress("This will process all documents and create embeddings...");
 
-        displayService.DisplayProgress("\n🔍 Ready for interactive search!");
-        displayService.DisplayProgress("Ask questions about your documents (or 'quit' to exit):");
+            var processingStopwatch = Stopwatch.StartNew();
+
+            LogProgress("📄 Starting document processing...");
+            var allChunks = await documentProcessor.ProcessAllDocumentsAsync();
+
+            processingStopwatch.Stop();
+            LogSuccess($"Document processing completed in {processingStopwatch.Elapsed.TotalSeconds:F1} seconds");
+
+            if (allChunks.Count > 0)
+            {
+                LogProgress($"💾 Storing {allChunks.Count} document chunks in vector database...");
+                var storageStopwatch = Stopwatch.StartNew();
+
+                await vectorSearchService.StoreDocumentsAsync(allChunks);
+
+                storageStopwatch.Stop();
+                LogSuccess($"Successfully stored {allChunks.Count} chunks in {storageStopwatch.Elapsed.TotalSeconds:F1} seconds");
+                LogSuccess($"Total processing time: {(processingStopwatch.Elapsed + storageStopwatch.Elapsed).TotalMinutes:F1} minutes");
+            }
+            else
+            {
+                LogError("No document chunks were generated during processing");
+                LogWarning("Check if your files are readable and in supported formats");
+                return;
+            }
+
+            LogSuccess("\n🎉 Knowledge base initialization complete!");
+            LogProgress("🔍 Ready for interactive search!");
+            LogProgress("Ask questions about your documents (or 'quit' to exit):");
+        }
+    }
+    catch (Exception ex)
+    {
+        stopwatch.Stop();
+        LogError($"Failed to connect to Qdrant: {ex.Message}");
+        LogWarning("Make sure Qdrant is running on http://localhost:6333");
+        return;
     }
 
-    // Interactive search loop
+    // Interactive search loop with enhanced logging
+    int queryCount = 0;
     while (true)
     {
         Console.Write("\n> ");
         var userQuery = Console.ReadLine();
 
         if (string.IsNullOrWhiteSpace(userQuery) || userQuery.ToLower() == "quit")
+        {
+            LogProgress("👋 Goodbye! Knowledge base is ready for web UI access.");
             break;
+        }
+
+        queryCount++;
+        LogProgress($"🔎 Processing query #{queryCount}: \"{userQuery}\"");
 
         try
         {
+            var searchStopwatch = Stopwatch.StartNew();
+
             // Search for relevant documents
             var searchResults = await vectorSearchService.SearchAsync(userQuery, limit: 8);
+            searchStopwatch.Stop();
 
             if (searchResults.Count == 0)
             {
-                displayService.DisplayError("No relevant documents found for your query.");
+                LogWarning($"No relevant documents found (search took {searchStopwatch.ElapsedMilliseconds}ms)");
                 continue;
             }
 
+            LogSuccess($"Found {searchResults.Count} relevant chunks ({searchStopwatch.ElapsedMilliseconds}ms)");
+            LogProgress("🤖 Generating AI response...");
+
+            var ragStopwatch = Stopwatch.StartNew();
             // Generate RAG response
             var ragResponse = await ragService.GenerateResponseAsync(userQuery, searchResults.Take(5).ToList());
+            ragStopwatch.Stop();
+
+            LogSuccess($"AI response generated ({ragStopwatch.ElapsedMilliseconds}ms)");
+            LogProgress($"Total query time: {(searchStopwatch.Elapsed + ragStopwatch.Elapsed).TotalSeconds:F1} seconds");
 
             // Display the enhanced response
             displayService.DisplayRAGResponse(userQuery, ragResponse, searchResults);
         }
         catch (Exception ex)
         {
-            displayService.DisplayError($"Search error: {ex.Message}");
+            LogError($"Search error: {ex.Message}");
+            LogWarning("This might be a temporary issue - try again or check your LM Studio connection");
         }
     }
 }
 catch (Exception ex)
 {
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine($"❌ Application error: {ex.Message}");
-    Console.ResetColor();
+    LogError($"Application error: {ex.Message}");
+    Console.WriteLine($"\nFull error details:\n{ex}");
 }
 finally
 {
