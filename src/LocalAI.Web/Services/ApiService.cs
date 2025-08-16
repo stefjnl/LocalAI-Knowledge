@@ -6,7 +6,7 @@ namespace LocalAI.Web.Services;
 
 public interface IApiService
 {
-    Task<ApiResponse<SearchResponse>> SearchAsync(string query, int limit = 8);
+    Task<ApiResponse<SearchResponse>> SearchAsync(string query, int limit = 8, List<ConversationExchange>? context = null);
     Task<ApiResponse<ProcessDocumentsResponse>> ProcessDocumentsAsync();
     Task<ApiResponse<CollectionStatusResponse>> GetCollectionStatusAsync();
     Task<ApiResponse<UploadDocumentResponse>> UploadDocumentAsync(string fileName, string fileType, byte[] fileContent);
@@ -31,11 +31,11 @@ public class ApiService : IApiService
         };
     }
 
-    public async Task<ApiResponse<SearchResponse>> SearchAsync(string query, int limit = 8)
+    public async Task<ApiResponse<SearchResponse>> SearchAsync(string query, int limit = 8, List<ConversationExchange>? context = null)
     {
         try
         {
-            var request = new SearchRequest(query, limit);
+            var request = new SearchRequest(query, limit, context);
             var response = await _httpClient.PostAsJsonAsync("/api/search", request);
 
             if (response.IsSuccessStatusCode)
@@ -207,7 +207,21 @@ public class ApiService : IApiService
 }
 
 // DTOs matching the actual API responses
-public record SearchRequest(string Query, int? Limit = 8);
+public record SearchRequest(string Query, int? Limit = 8, List<ConversationExchange>? Context = null);
+
+public record ConversationExchange
+{
+    public string Query { get; set; } = string.Empty;
+    public string Response { get; set; } = string.Empty;
+}
+
+public record TimingInfo
+{
+    public double TotalTimeMs { get; set; }
+    public double SearchTimeMs { get; set; }
+    public double GenerationTimeMs { get; set; }
+    public string FormattedResponseTime { get; set; } = string.Empty;
+}
 
 public record SearchResponse
 {
@@ -215,6 +229,7 @@ public record SearchResponse
     public bool HasResults { get; set; }
     public string RAGResponse { get; set; } = string.Empty;
     public List<SearchResult> Sources { get; set; } = new();
+    public TimingInfo Timing { get; set; } = new();
 }
 
 public record ProcessDocumentsResponse

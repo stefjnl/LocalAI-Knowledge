@@ -292,29 +292,68 @@ app.MapPost("/api/search", async (SearchRequest request, IVectorSearchService ve
             return Results.BadRequest("Query cannot be empty");
         }
 
+        // Start timing
+        var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var searchStopwatch = System.Diagnostics.Stopwatch.StartNew();
+
         // Search for relevant documents
         var searchResults = await vectorSearch.SearchAsync(request.Query, request.Limit ?? 8);
+        searchStopwatch.Stop();
+        var searchTime = searchStopwatch.ElapsedMilliseconds;
 
         if (searchResults.Count == 0)
         {
+            totalStopwatch.Stop();
+            var totalElapsedTime = totalStopwatch.ElapsedMilliseconds;
+
             return Results.Ok(new SearchResponse
             {
                 Query = request.Query,
                 HasResults = false,
                 RAGResponse = "No relevant documents found for your query.",
-                Sources = new List<LocalAI.Core.Models.SearchResult>()
+                Sources = new List<LocalAI.Core.Models.SearchResult>(),
+                Timing = new TimingInfo
+                {
+                    TotalTimeMs = totalElapsedTime,
+                    SearchTimeMs = searchTime,
+                    GenerationTimeMs = 0,
+                    FormattedResponseTime = $"{totalElapsedTime / 1000.0:F2}s"
+                }
             });
         }
 
-        // Generate RAG response
-        var ragResponse = await ragService.GenerateResponseAsync(request.Query, searchResults.Take(5).ToList());
+        // Add context to the query if available
+        var queryWithContext = request.Query;
+        if (request.Context != null && request.Context.Any())
+        {
+            // Take the last 3 exchanges for context
+            var recentContext = request.Context.TakeLast(3);
+            var contextText = string.Join("\n", recentContext.Select(ex => $"Previous question: {ex.Query}\nPrevious answer: {ex.Response}"));
+            queryWithContext = $"{contextText}\n\nCurrent question: {request.Query}";
+        }
+
+        // Generate RAG response with timing
+        var generationStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var ragResponse = await ragService.GenerateResponseAsync(queryWithContext, searchResults.Take(5).ToList());
+        generationStopwatch.Stop();
+        var generationTime = generationStopwatch.ElapsedMilliseconds;
+
+        totalStopwatch.Stop();
+        var totalTime = totalStopwatch.ElapsedMilliseconds;
 
         return Results.Ok(new SearchResponse
         {
             Query = request.Query,
             HasResults = true,
             RAGResponse = ragResponse,
-            Sources = searchResults
+            Sources = searchResults,
+            Timing = new TimingInfo
+            {
+                TotalTimeMs = totalTime,
+                SearchTimeMs = searchTime,
+                GenerationTimeMs = generationTime,
+                FormattedResponseTime = $"{totalTime / 1000.0:F2}s"
+            }
         });
     }
     catch (Exception ex)
@@ -326,7 +365,7 @@ app.MapPost("/api/search", async (SearchRequest request, IVectorSearchService ve
 app.Run();
 
 // DTOs for API
-public record SearchRequest(string Query, int? Limit = 8);
+public record SearchRequest(string Query, int? Limit = 8, List<ConversationExchange>? Context = null);
 
 public record SearchResponse
 {
@@ -334,4 +373,19 @@ public record SearchResponse
     public bool HasResults { get; set; }
     public string RAGResponse { get; set; } = string.Empty;
     public List<LocalAI.Core.Models.SearchResult> Sources { get; set; } = new();
+    public TimingInfo Timing { get; set; } = new();
+}
+
+public record ConversationExchange
+{
+    public string Query { get; set; } = string.Empty;
+    public string Response { get; set; } = string.Empty;
+}
+
+public record TimingInfo
+{
+    public double TotalTimeMs { get; set; }
+    public double SearchTimeMs { get; set; }
+    public double GenerationTimeMs { get; set; }
+    public string FormattedResponseTime { get; set; } = string.Empty;
 }

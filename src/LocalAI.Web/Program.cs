@@ -20,6 +20,9 @@ builder.Services.AddHttpClient<IApiService, ApiService>(client =>
 // Register API service
 builder.Services.AddScoped<IApiService, ApiService>();
 
+// Register Conversation service
+builder.Services.AddScoped<IConversationService, ConversationService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
