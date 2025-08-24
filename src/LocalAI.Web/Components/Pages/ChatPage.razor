@@ -1,0 +1,429 @@
+@page "/chat"
+@using LocalAI.Core.Models
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@inject IApiService ApiService
+@inject IChatApiService ChatApiService
+@inject IConversationService ConversationService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Chat Sessions</PageTitle>
+
+<div class="container-fluid h-100">
+    <div class="row h-100">
+        <!-- Sidebar for chat sessions -->
+        <div class="col-md-3 col-lg-2 bg-light border-end p-3" style="max-height: 100vh; overflow-y: auto;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Chat Sessions</h5>
+                <button class="btn btn-sm btn-primary" @onclick="CreateNewSession">
+                    <i class="bi bi-plus-lg"></i> New Chat
+                </button>
+            </div>
+
+            @if (sessions == null)
+            {
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span class="ms-2">Loading sessions...</span>
+                </div>
+            }
+            else if (!sessions.Any())
+            {
+                <div class="text-center text-muted">
+                    <p>No chat sessions yet</p>
+                    <button class="btn btn-outline-primary btn-sm" @onclick="CreateNewSession">
+                        Start your first chat
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="list-group">
+                    @foreach (var session in sessions.OrderByDescending(s => s.LastActivity))
+                    {
+                        <div class="list-group-item list-group-item-action p-2 @(session.SessionId == currentSessionId ? "active" : "")"
+                             @onclick="() => LoadSession(session.SessionId)">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1 @(session.SessionId == currentSessionId ? "text-white" : "")">
+                                    @if (string.IsNullOrEmpty(session.Title))
+                                    {
+                                        <span>New Chat</span>
+                                    }
+                                    else
+                                    {
+                                        @session.Title
+                                    }
+                                </h6>
+                                <small class="text-muted @(session.SessionId == currentSessionId ? "text-light" : "")">
+                                    @session.LastActivity.ToString("MMM d")
+                                </small>
+                            </div>
+                            <p class="mb-1 small text-muted @(session.SessionId == currentSessionId ? "text-light" : "")">
+                                @session.MessageCount messages
+                            </p>
+                            <div class="d-flex justify-content-end">
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick:stopPropagation="true" @onclick="() => DeleteSession(session.SessionId)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Main chat area -->
+        <div class="col-md-9 col-lg-10 p-0 d-flex flex-column" style="max-height: 100vh;">
+            @if (currentSessionId == Guid.Empty)
+            {
+                <div class="d-flex align-items-center justify-content-center h-100">
+                    <div class="text-center">
+                        <h3 class="text-muted">Welcome to Chat</h3>
+                        <p class="text-muted">Select a chat session or create a new one to start chatting</p>
+                        <button class="btn btn-primary" @onclick="CreateNewSession">
+                            Start New Chat
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="d-flex flex-column h-100">
+                    <!-- Chat header -->
+                    <div class="border-bottom p-3 bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                @if (string.IsNullOrEmpty(currentSessionTitle))
+                                {
+                                    <span>New Chat</span>
+                                }
+                                else
+                                {
+                                    @currentSessionTitle
+                                }
+                            </h5>
+                            <div>
+                                <span class="badge bg-secondary">@currentMessageCount messages</span>
+                                <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="CreateNewSession">
+                                    New Chat
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Messages area -->
+                    <div class="flex-grow-1 p-3" style="overflow-y: auto;" @ref="messagesContainer">
+                        @if (messages == null)
+                        {
+                            <div class="text-center">
+                                <div class="spinner-border" role="status"></div>
+                                <span class="ms-2">Loading messages...</span>
+                            </div>
+                        }
+                        else if (!messages.Any())
+                        {
+                            <div class="text-center text-muted mt-5">
+                                <h4>Start a conversation</h4>
+                                <p>Send a message to begin chatting with your AI assistant</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var message in messages)
+                            {
+                                <div class="message @(message.Role == MessageRole.User ? "user-message" : "assistant-message") mb-3">
+                                    <div class="d-flex">
+                                        <div class="message-avatar me-2">
+                                            @if (message.Role == MessageRole.User)
+                                            {
+                                                <span class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                                                    👤
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                                                    🤖
+                                                </span>
+                                            }
+                                        </div>
+                                        <div class="message-content flex-grow-1">
+                                            <div class="message-bubble p-3 rounded">
+                                                <p class="mb-0">@message.Content</p>
+                                            </div>
+                                            <small class="text-muted">@message.Timestamp.ToString("MMM d, h:mm tt")</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <!-- Input area -->
+                    <div class="border-top p-3 bg-light">
+                        <div class="input-group">
+                            <input type="text" class="form-control" placeholder="Type your message..." 
+                                   @bind="currentMessage" @bind:event="oninput"
+                                   @onkeypress="HandleKeyPress" disabled="@isSending" />
+                            <button class="btn btn-primary" @onclick="SendMessage" disabled="@(string.IsNullOrWhiteSpace(currentMessage) || isSending)">
+                                @if (isSending)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                }
+                                else
+                                {
+                                    <span>Send</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ChatSessionResponse>? sessions;
+    private List<ChatMessageResponse>? messages;
+    private Guid currentSessionId = Guid.Empty;
+    private string currentSessionTitle = string.Empty;
+    private int currentMessageCount = 0;
+    private string currentMessage = string.Empty;
+    private bool isSending = false;
+    private ElementReference messagesContainer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSessions();
+    }
+
+    private async Task LoadSessions()
+    {
+        var response = await ChatApiService.GetSessionsAsync();
+        if (response.Success && response.Data != null)
+        {
+            sessions = response.Data;
+        }
+        else
+        {
+            // Handle error
+            sessions = new List<ChatSessionResponse>();
+        }
+    }
+
+    private async Task LoadSession(Guid sessionId)
+    {
+        currentSessionId = sessionId;
+        currentSessionTitle = sessions?.FirstOrDefault(s => s.SessionId == sessionId)?.Title ?? "Chat";
+        currentMessageCount = sessions?.FirstOrDefault(s => s.SessionId == sessionId)?.MessageCount ?? 0;
+        
+        var response = await ChatApiService.GetSessionMessagesAsync(sessionId);
+        if (response.Success && response.Data != null)
+        {
+            messages = response.Data;
+        }
+        else
+        {
+            // Handle error
+            messages = new List<ChatMessageResponse>();
+        }
+
+        await ScrollToBottom();
+    }
+
+    private async Task CreateNewSession()
+    {
+        var response = await ChatApiService.CreateSessionAsync();
+        if (response.Success && response.Data != null)
+        {
+            var newSession = response.Data;
+            currentSessionId = newSession.SessionId;
+            currentSessionTitle = newSession.Title;
+            currentMessageCount = newSession.MessageCount;
+            messages = new List<ChatMessageResponse>();
+            
+            // Add to sessions list
+            sessions ??= new List<ChatSessionResponse>();
+            sessions.Insert(0, newSession);
+
+            await ScrollToBottom();
+        }
+        else
+        {
+            // Handle error - for now, just create a local session
+            var newSessionId = Guid.NewGuid();
+            currentSessionId = newSessionId;
+            currentSessionTitle = "New Chat";
+            currentMessageCount = 0;
+            messages = new List<ChatMessageResponse>();
+            
+            // Add to sessions list
+            sessions ??= new List<ChatSessionResponse>();
+            sessions.Insert(0, new ChatSessionResponse
+            {
+                SessionId = newSessionId,
+                Title = "New Chat",
+                CreatedDate = DateTime.Now,
+                LastActivity = DateTime.Now,
+                MessageCount = 0
+            });
+
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(currentMessage) || currentSessionId == Guid.Empty)
+            return;
+
+        isSending = true;
+        StateHasChanged(); // Update UI to show sending state
+
+        try
+        {
+            // Send user message to API
+            var userResponse = await ChatApiService.AddMessageAsync(currentSessionId, currentMessage, MessageRole.User);
+            if (userResponse.Success && userResponse.Data != null)
+            {
+                messages ??= new List<ChatMessageResponse>();
+                messages.Add(userResponse.Data);
+            }
+            else
+            {
+                // Fallback to local message if API fails
+                var userMessage = new ChatMessageResponse
+                {
+                    MessageId = Guid.NewGuid(),
+                    SessionId = currentSessionId,
+                    Role = MessageRole.User,
+                    Content = currentMessage,
+                    Timestamp = DateTime.Now
+                };
+                messages ??= new List<ChatMessageResponse>();
+                messages.Add(userMessage);
+            }
+
+            // Get AI response using the existing search functionality
+            var context = await ConversationService.GetRecentContextAsync(3);
+            var searchResponse = await ApiService.SearchAsync(currentMessage, 8, context);
+            
+            if (searchResponse.Success && searchResponse.Data != null)
+            {
+                var aiMessage = new ChatMessageResponse
+                {
+                    MessageId = Guid.NewGuid(),
+                    SessionId = currentSessionId,
+                    Role = MessageRole.Assistant,
+                    Content = searchResponse.Data.RAGResponse,
+                    Timestamp = DateTime.Now
+                };
+                messages.Add(aiMessage);
+                
+                // Add to conversation history for context
+                await ConversationService.AddToConversationHistoryAsync(currentMessage, searchResponse.Data.RAGResponse);
+            }
+            else
+            {
+                // Fallback response if API fails
+                var aiMessage = new ChatMessageResponse
+                {
+                    MessageId = Guid.NewGuid(),
+                    SessionId = currentSessionId,
+                    Role = MessageRole.Assistant,
+                    Content = "Sorry, I encountered an error processing your request.",
+                    Timestamp = DateTime.Now
+                };
+                messages.Add(aiMessage);
+            }
+
+            currentMessage = string.Empty;
+            await ScrollToBottom();
+
+            // Update session activity and message count
+            var session = sessions?.FirstOrDefault(s => s.SessionId == currentSessionId);
+            if (session != null)
+            {
+                session.LastActivity = DateTime.Now;
+                session.MessageCount = messages.Count;
+            }
+        }
+        finally
+        {
+            isSending = false;
+            StateHasChanged(); // Update UI to show finished state
+        }
+    }
+
+    private async Task DeleteSession(Guid sessionId)
+    {
+        var response = await ChatApiService.DeleteSessionAsync(sessionId);
+        if (response.Success)
+        {
+            sessions?.RemoveAll(s => s.SessionId == sessionId);
+            
+            if (currentSessionId == sessionId)
+            {
+                currentSessionId = Guid.Empty;
+                currentSessionTitle = string.Empty;
+                currentMessageCount = 0;
+                messages = null;
+            }
+        }
+        else
+        {
+            // Handle error - for now, just remove locally
+            sessions?.RemoveAll(s => s.SessionId == sessionId);
+            
+            if (currentSessionId == sessionId)
+            {
+                currentSessionId = Guid.Empty;
+                currentSessionTitle = string.Empty;
+                currentMessageCount = 0;
+                messages = null;
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isSending && !string.IsNullOrWhiteSpace(currentMessage))
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await Task.Delay(100); // Small delay to ensure DOM is updated
+        await messagesContainer.FocusAsync();
+    }
+}
+
+<style>
+    .user-message .message-bubble {
+        background-color: #007bff;
+        color: white;
+        margin-left: auto;
+        max-width: 70%;
+    }
+
+    .assistant-message .message-bubble {
+        background-color: #f8f9fa;
+        color: #212529;
+        border: 1px solid #dee2e6;
+        max-width: 70%;
+    }
+
+    .message-avatar {
+        flex-shrink: 0;
+    }
+
+    .message-content {
+        min-width: 0;
+    }
+</style>

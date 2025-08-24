@@ -23,6 +23,9 @@ builder.Services.AddScoped<IApiService, ApiService>();
 // Register Conversation service
 builder.Services.AddScoped<IConversationService, ConversationService>();
 
+// Register Chat API service
+builder.Services.AddScoped<IChatApiService, ChatApiService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
