@@ -19,26 +19,41 @@ Build a NotebookLM-style experience that:
 ?   Console App   ??????   Core (Domain)  ?????? Infrastructure  ?
 ?  (UI/Entry)     ?    ?  (Interfaces)    ?    ? (Implementation)?
 ???????????????????    ????????????????????    ???????????????????
+       ?                         ?                      ?
+       ?                         ?                      ?
+       v                         v                      v
+???????????????????    ????????????????????    ???????????????????
+?   Web UI        ??????   Data           ?????? External       ?
+?  (Blazor)       ?    ?  (Qdrant, etc.)  ?    ? Services       ?
+???????????????????    ????????????????????    ???????????????????
 ```
 
-**Dependencies flow inward**: Console ? Core ? Infrastructure
+**Dependencies flow inward**: All outer layers depend on inner layers, not vice versa
 
 ### Core Components
 
 #### ?? **LocalAI.Core** (Domain Layer)
-- **Models**: Data structures (`SearchResult`, `DocumentChunk`)
+- **Models**: Data structures (`SearchResult`, `DocumentChunk`, `ChatSession`)
 - **Interfaces**: Service contracts that define what the system can do
 - **No external dependencies** - pure business logic
 
 #### ?? **LocalAI.Infrastructure** (Data Layer)  
 - **Service Implementations**: Concrete implementations of Core interfaces
 - **External Integrations**: LM Studio, Qdrant, PDF processing
+- **Chat Session Storage**: SQLite database for conversation persistence
 - **Depends on Core** for interfaces
 
 #### ?? **LocalAI.Console** (Presentation Layer)
 - **Entry Point**: Dependency injection setup and application lifecycle
 - **User Interface**: Interactive console for queries and responses
 - **Depends on Core** for interfaces, **uses Infrastructure** implementations
+
+#### ?? **LocalAI.Web** (Presentation Layer)
+- **Web Interface**: Blazor Server application with Claude-style chat UI
+- **API Consumption**: Communicates with LocalAI.Api via HttpClient
+- **Conversation Management**: Client-side sessionStorage for temporary history
+- **Responsive Design**: Mobile-friendly layout with modern styling
+- **Depends on Core** for models, **uses Infrastructure** implementations via API
 
 ## ?? Service Architecture
 
@@ -51,6 +66,7 @@ Build a NotebookLM-style experience that:
 | **IDocumentProcessor** | Extract and chunk text from files | PDF processing + text chunking |
 | **IRAGService** | Generate enhanced responses using LLM | LM Studio chat API with context injection |
 | **IDisplayService** | Format and display results to user | Console output with colors and formatting |
+| **IChatSessionStore** | Store and manage chat conversations | SQLite database with EF Core |
 
 ### Data Flow
 
@@ -241,6 +257,24 @@ var response = await ragService.GenerateResponseAsync(query, context);
 
 3. **Update configuration** for new provider settings
 
+### Web UI Development
+
+The Web UI is built with Blazor Server and follows a component-based architecture:
+
+1. **Components** are located in `src/LocalAI.Web/Components/`
+2. **Services** for API communication are in `src/LocalAI.Web/Services/`
+3. **Models** specific to the Web UI are in `src/LocalAI.Web/Models/`
+
+**Key Components**:
+- `SearchPage.razor` - Main chat interface with Claude-style UI
+- `Documents.razor` - Document management and processing
+- `Dashboard.razor` - System status and metrics
+
+**Styling**:
+- Uses Bootstrap 5 for responsive design
+- Custom CSS in component-specific style blocks
+- Mobile-first responsive design approach
+
 ### Testing Approach
 
 #### Unit Testing
@@ -319,7 +353,7 @@ Assert.True(chunks.Count > 0);
 
 ### Phase 2: Enhanced Intelligence (In Progress)
 - [ ] Better chunking strategies (respect document structure)
-- [ ] Web UI for non-technical users
+- [x] Web UI for non-technical users
 - [ ] Batch processing optimization
 - [ ] Progress bars and better UX
 
