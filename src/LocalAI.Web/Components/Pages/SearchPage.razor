@@ -9,9 +9,9 @@
 
 <PageTitle>Knowledge Search</PageTitle>
 
-<div class="container-fluid py-4">
-    <div class="row justify-content-center">
-        <div class="col-lg-10">
+<div class="container-fluid py-4 h-100">
+    <div class="row justify-content-center h-100">
+        <div class="col-lg-10 d-flex flex-column h-100">
 
             <div class="text-center mb-4">
                 <h1 class="display-5 fw-bold text-primary">🧠 Local AI Knowledge Assistant</h1>
@@ -80,97 +80,154 @@
                 </div>
             </div>
 
-            @if (searchResponse != null)
+            <!-- Conversation History -->
+            @if (conversationHistory.Any() || searchResponse != null)
             {
-                <div class="card shadow-sm border-0">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">AI Response for: "@searchResponse.Query"</h5>
-                    </div>
-                    <div class="card-body">
-
-                        <div class="mb-4">
-                            <div class="bg-light rounded p-4 border-start border-primary border-4">
-                                @if (!string.IsNullOrEmpty(searchResponse.RAGResponse))
+                <div class="flex-grow-1 overflow-auto mb-4" style="max-height: 60vh;">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Conversation</h5>
+                            <button class="btn btn-sm btn-light" @onclick="ClearConversation">
+                                Clear
+                            </button>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="p-3">
+                                @foreach (var item in conversationHistory)
                                 {
-                                    <div class="rag-response">
-                                        @((MarkupString)FormatResponse(searchResponse.RAGResponse))
+                                    <div class="message user-message mb-4">
+                                        <div class="d-flex">
+                                            <div class="message-avatar me-3">
+                                                <span class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                                                    👤
+                                                </span>
+                                            </div>
+                                            <div class="message-content flex-grow-1">
+                                                <div class="message-bubble bg-primary text-white p-3 rounded">
+                                                    <p class="mb-0">@item.Query</p>
+                                                </div>
+                                                <small class="text-muted">@item.Timestamp.ToString("MMM d, h:mm tt")</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="message assistant-message mb-4">
+                                        <div class="d-flex">
+                                            <div class="message-avatar me-3">
+                                                <span class="bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                                                    🤖
+                                                </span>
+                                            </div>
+                                            <div class="message-content flex-grow-1">
+                                                <div class="message-bubble bg-light border p-3 rounded">
+                                                    @((MarkupString)FormatResponse(item.Response))
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 }
-                                else
+
+                                @if (searchResponse != null)
                                 {
-                                    <p class="text-muted mb-0">No response generated.</p>
-                                }
-                                <div class="mt-3">
-                                    <button class="btn btn-sm btn-outline-primary" @onclick="ToggleResponseFormat">
-                                        @if (isResponseExpanded)
-                                        {
-                                            <span>📋 Collapse Response</span>
-                                        }
-                                        else
-                                        {
-                                            <span>📋 Expand Response</span>
-                                        }
-                                    </button>
-                                </div>
-                                @if (searchResponse.Timing != null && !string.IsNullOrEmpty(searchResponse.Timing.FormattedResponseTime))
-                                {
-                                    <div class="mt-2 text-muted small">
-                                        Responded in @searchResponse.Timing.FormattedResponseTime
+                                    <div class="message user-message mb-4">
+                                        <div class="d-flex">
+                                            <div class="message-avatar me-3">
+                                                <span class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                                                    👤
+                                                </span>
+                                            </div>
+                                            <div class="message-content flex-grow-1">
+                                                <div class="message-bubble bg-primary text-white p-3 rounded">
+                                                    <p class="mb-0">@searchResponse.Query</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="message assistant-message mb-4">
+                                        <div class="d-flex">
+                                            <div class="message-avatar me-3">
+                                                <span class="bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                                                    🤖
+                                                </span>
+                                            </div>
+                                            <div class="message-content flex-grow-1">
+                                                <div class="message-bubble bg-light border p-3 rounded">
+                                                    @if (!string.IsNullOrEmpty(searchResponse.RAGResponse))
+                                                    {
+                                                        @((MarkupString)FormatResponse(searchResponse.RAGResponse))
+                                                    }
+                                                    else
+                                                    {
+                                                        <p class="text-muted mb-0">No response generated.</p>
+                                                    }
+                                                    @if (searchResponse.Timing != null && !string.IsNullOrEmpty(searchResponse.Timing.FormattedResponseTime))
+                                                    {
+                                                        <div class="mt-2 text-muted small">
+                                                            Responded in @searchResponse.Timing.FormattedResponseTime
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 }
                             </div>
                         </div>
+                    </div>
+                </div>
+            }
 
-                        @if (searchResponse.Sources?.Any() == true)
-                        {
-                            <div class="border-top pt-4">
-                                <h6 class="text-muted mb-3">Sources (@searchResponse.Sources.Count)</h6>
-                                <div class="row g-3">
-                                    @foreach (var source in searchResponse.Sources)
-                                    {
-                                        <div class="col-md-6">
-                                            <div class="card h-100 border-0 bg-light">
-                                                <div class="card-body p-3">
-                                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                                        <h6 class="card-title text-primary mb-0">
-                                                            📄 @GetSourceName(source.Source)
-                                                        </h6>
-                                                        <span class="badge bg-primary rounded-pill">
-                                                            @(((int)(source.Score * 100)).ToString())%
-                                                        </span>
-                                                    </div>
-                                                    @if (!string.IsNullOrEmpty(source.PageInfo))
-                                                    {
-                                                        <small class="text-muted d-block mb-2">@source.PageInfo</small>
-                                                    }
-<p class="card-text small text-muted">
-                                                        @if (IsSourceExpanded(source))
-                                                        {
-                                                            @source.Content
-                                                        }
-                                                        else
-                                                        {
-                                                            @TruncateContent(source.Content, 150)
-                                                        }
-                                                    </p>
-                                                    <button class="btn btn-sm btn-outline-secondary mt-2"
-                                                        @onclick="() => ToggleSourceExpansion(source)">
-                                                        @if (IsSourceExpanded(source))
-                                                        {
-                                                            <span>⬆️ Show Less</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span>⬇️ Show More</span>
-                                                        }
-                                                    </button>
-                                                </div>
+            <!-- Sources Section (only show when there's a response) -->
+            @if (searchResponse != null && searchResponse.Sources?.Any() == true)
+            {
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">Sources (@searchResponse.Sources.Count)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            @foreach (var source in searchResponse.Sources)
+                            {
+                                <div class="col-md-6">
+                                    <div class="card h-100 border-0 bg-light">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <h6 class="card-title text-primary mb-0">
+                                                    📄 @GetSourceName(source.Source)
+                                                </h6>
+                                                <span class="badge bg-primary rounded-pill">
+                                                    @(((int)(source.Score * 100)).ToString())%
+                                                </span>
                                             </div>
+                                            @if (!string.IsNullOrEmpty(source.PageInfo))
+                                            {
+                                                <small class="text-muted d-block mb-2">@source.PageInfo</small>
+                                            }
+                                            <p class="card-text small text-muted">
+                                                @if (IsSourceExpanded(source))
+                                                {
+                                                    @source.Content
+                                                }
+                                                else
+                                                {
+                                                    @TruncateContent(source.Content, 150)
+                                                }
+                                            </p>
+                                            <button class="btn btn-sm btn-outline-secondary mt-2"
+                                                @onclick="() => ToggleSourceExpansion(source)">
+                                                @if (IsSourceExpanded(source))
+                                                {
+                                                    <span>⬆️ Show Less</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>⬇️ Show More</span>
+                                                }
+                                            </button>
                                         </div>
-                                    }
+                                    </div>
                                 </div>
-                            </div>
-                        }
+                            }
+                        </div>
                     </div>
                 </div>
             }
@@ -178,6 +235,39 @@
         </div>
     </div>
 </div>
+
+<style>
+    .message {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    .user-message .message-bubble {
+        border-top-left-radius: 0.5rem;
+        border-top-right-radius: 0.5rem;
+        border-bottom-left-radius: 0.5rem;
+        border-bottom-right-radius: 0;
+    }
+
+    .assistant-message .message-bubble {
+        border-top-left-radius: 0.5rem;
+        border-top-right-radius: 0.5rem;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0.5rem;
+    }
+
+    .message-avatar {
+        flex-shrink: 0;
+    }
+
+    .message-content {
+        min-width: 0;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
 
 @code {
     private string searchQuery = "";
@@ -195,6 +285,16 @@
     {
         await CheckCollectionStatus();
         conversationHistory = await ConversationService.GetConversationHistoryAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (searchResponse != null)
+        {
+            searchQuery = "";
+            searchResponse = null;
+            StateHasChanged();
+        }
     }
 
     private async Task CheckCollectionStatus()
@@ -287,6 +387,7 @@
         finally
         {
             isSearching = false;
+            StateHasChanged();
         }
     }
 
