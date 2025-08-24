@@ -1,0 +1,182 @@
+# .NET Development Project - DotNet Tutorial Generator
+
+# Priority Order
+
+1. Preserve working functionality above all else
+2. Make minimal changes that solve the specific problem
+3. Follow .NET best practices and Clean Architecture principles
+4. Optimize for maintainability and testability
+
+# Core Principles
+
+- Provide clean, buildable, and maintainable .NET code
+- Respect the Clean Architecture layers (Core → Infrastructure → Presentation)
+- Break down large tasks into smaller components
+- Ask clarifying questions when scope is unclear
+- For small changes: make minimal, targeted edits only
+- Only rewrite files when absolutely necessary for major structural changes
+- Preserve existing working code and established patterns
+
+# Maintain Conversation Context
+
+- Reference specific files/projects/namespaces discussed earlier
+- Build on previous responses instead of starting from scratch
+- When continuing work, start with "Building on [previous work]..."
+- Reference previous implementations in the same conversation
+- Understand the multi-project solution structure
+
+# Efficiency Guidelines
+
+- When making small modifications, edit only the specific classes/methods needed
+- Avoid regenerating entire files for minor tweaks
+- Build incrementally on previous responses in the same conversation
+- If unsure about scope or architecture impact, ask before making large changes
+- Respect project boundaries and dependencies
+
+# Before Making Changes
+
+- Always verify current working state first (`dotnet build`, `dotnet test`)
+- Test existing functionality before modifications
+- Check Docker container structure and deployment setup
+- Understand the project's target framework (.NET 8.0)
+- Verify NuGet package versions and dependencies
+- Check if similar functionality already exists in the codebase
+
+# .NET Code Standards
+
+- Follow Microsoft .NET coding conventions and C# style guidelines
+- Use nullable reference types consistently (`<Nullable>enable</Nullable>`)
+- Implement proper async/await patterns with ConfigureAwait(false) where appropriate
+- Use dependency injection following the established patterns
+- Prefer record types for DTOs and immutable data
+- Use primary constructors and expression-bodied members where appropriate
+- Follow established naming conventions (PascalCase for public members, camelCase for private)
+- Use `var` for local variables when type is obvious from context
+
+# Architecture Patterns
+
+- Respect Clean Architecture boundaries:
+  - **Core**: Domain models, interfaces, no external dependencies
+  - **Infrastructure**: Implementation of Core interfaces, external services
+  - **Presentation**: API controllers, console commands, Blazor pages
+- Use CQRS pattern where implemented
+- Follow Repository and Unit of Work patterns
+- Implement proper separation of concerns
+- Use factory patterns for service creation (like LLMServiceFactory)
+
+# Testing & Verification
+
+- Test one thing at a time in actual deployment context
+- Run `dotnet build` and `dotnet test` before committing changes
+- Validate Docker builds work: `docker build -f docker/Dockerfile .`
+- Check container structure and paths
+- Follow existing test patterns (xUnit, FluentAssertions)
+- Maintain test coverage for Core and Infrastructure layers
+- Use proper mocking with interfaces
+
+# Project Structure Awareness
+
+- **Core Project**: Domain models, interfaces, core business logic
+- **Infrastructure**: External integrations (GitHub, LLM, FileSystem, Roslyn)
+- **API**: REST endpoints and middleware
+- **Console**: CLI commands and utilities
+- **Tests**: Separate test projects for each layer
+- Understand cross-project dependencies and reference patterns
+
+# Never modify without permission:
+
+- `*.csproj` files (project files)
+- `Directory.Build.props` (solution-wide settings)
+- `global.json` (SDK version)
+- `DotNetTutorialGenerator.sln` (solution file)
+- `docker-compose.yml` and Dockerfile configurations
+- `appsettings.json` files (especially Production settings)
+
+# Package Management
+
+- Add new NuGet packages through `PackageReference` in .csproj files
+- Use consistent versions across the solution
+- Check `Directory.Build.props` for common packages
+- Specify exact versions for stability
+- Consider package compatibility with .NET 8.0
+- Ask before adding heavyweight packages or changing target framework
+
+# Error Handling & Logging
+
+- Use Serilog for structured logging (already configured)
+- Implement proper exception handling with specific exception types
+- Use Result patterns or custom exceptions for business logic errors
+- Include meaningful error messages with context
+- Log at appropriate levels using ILogger<T> dependency injection
+- Handle async operations properly with try/catch around await calls
+
+# Configuration & Environment
+
+- Use `appsettings.json` hierarchy (base → Development → Production)
+- Access configuration through IConfiguration or strongly-typed options
+- Use environment variables for sensitive data (API keys, connection strings)
+- Follow the established configuration patterns in the codebase
+- Test configuration loading in different environments
+
+# External Integrations
+
+- **LLM Services**: OpenAI, Claude, with factory pattern selection
+- **GitHub API**: Octokit integration for repository crawling
+- **Roslyn**: Microsoft.CodeAnalysis for C# code parsing
+- **Docker**: Multi-stage builds with separate API/Console images
+- Follow established patterns for HTTP clients and external service calls
+
+# Security Practices
+
+- Never hardcode API keys or sensitive data
+- Use `IOptions<T>` for configuration injection
+- Validate inputs using Data Annotations or FluentValidation
+- Follow established authentication/authorization patterns
+- Use HTTPS redirection and security headers
+- Implement proper CORS policies
+
+# Communication Rules
+
+- Ask about architecture decisions before implementing new features
+- Clarify which project layer a change belongs to
+- For new features: provide complete, tested solutions following Clean Architecture
+- For modifications: make targeted changes respecting existing patterns
+- Explain reasoning behind architectural decisions
+- When debugging fails, suggest alternative approaches or patterns
+
+# Never assume:
+
+- Default Docker container configurations or paths
+- Existing service registrations in DI container
+- Available NuGet packages without checking project files
+- Configuration structure without examining appsettings files
+- Database schema or connection strings (if added later)
+- External API availability or response formats
+
+# Always verify:
+
+- All `using` statements resolve correctly
+- Code compiles with `dotnet build`
+- Tests pass with `dotnet test`
+- Docker builds succeed
+- Configuration binding works correctly
+- Dependency injection registrations are complete
+- Interface implementations match contracts
+
+# Specific Project Patterns
+
+- Use the established `IRepositoryCrawler` pattern for data access
+- Follow the `ILLMService` abstraction for AI integrations  
+- Implement progress tracking using the established patterns
+- Use the factory pattern for service provider selection
+- Follow async/await patterns consistently throughout
+- Respect the tutorial generation workflow established in the codebase
+
+# Docker & Deployment Considerations
+
+- Understand multi-stage Docker builds (build → publish → runtime)
+- Test in container environment, not just host
+- Verify file paths work in Linux containers
+- Check port mappings and environment variable passing
+- Test both API and Console entry points
+- Consider resource constraints in containerized environments
