@@ -33,7 +33,7 @@ public static class EnhancedSearchEndpoint
                 // Get conversation history for context
                 var recentMessages = await sessionStore.GetRecentMessagesAsync(sessionId, 5);
                 var conversationContext = recentMessages
-                    .Select(m => new ConversationExchange
+                    .Select(m => new LocalAI.Core.Models.ConversationExchange
                     {
                         Query = m.Role == MessageRole.User ? m.Content : "",
                         Response = m.Role == MessageRole.Assistant ? m.Content : ""

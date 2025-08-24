@@ -1,3 +1,4 @@
+using LocalAI.Core.Models;
 using Microsoft.JSInterop;
 using static LocalAI.Web.Services.ApiService;
 
@@ -8,7 +9,7 @@ public interface IConversationService
     Task<List<ConversationHistoryItem>> GetConversationHistoryAsync();
     Task AddToConversationHistoryAsync(string query, string response);
     Task ClearConversationHistoryAsync();
-    Task<List<ConversationExchange>> GetRecentContextAsync(int count = 3);
+    Task<List<LocalAI.Core.Models.ConversationExchange>> GetRecentContextAsync(int count = 3);
 }
 
 public class ConversationHistoryItem
@@ -88,13 +89,13 @@ public class ConversationService : IConversationService
         }
     }
 
-    public async Task<List<ConversationExchange>> GetRecentContextAsync(int count = 3)
+    public async Task<List<LocalAI.Core.Models.ConversationExchange>> GetRecentContextAsync(int count = 3)
     {
         var history = await GetConversationHistoryAsync();
         var recentItems = history.TakeLast(count).ToList();
 
         // Convert to ConversationExchange (without timestamp)
-        return recentItems.Select(item => new ConversationExchange
+        return recentItems.Select(item => new LocalAI.Core.Models.ConversationExchange
         {
             Query = item.Query,
             Response = item.Response

@@ -831,6 +831,23 @@
             // Get recent context for the conversation
             var context = await ConversationService.GetRecentContextAsync(3);
             
+            // Log context being sent
+            Console.WriteLine($"[DEBUG] SearchPage sending request: {searchQuery}");
+            if (context != null && context.Any())
+            {
+                Console.WriteLine($"[DEBUG] SearchPage sending conversation history: {context.Count} exchanges");
+                for (int i = 0; i < context.Count; i++)
+                {
+                    var exchange = context[i];
+                    Console.WriteLine($"[DEBUG] SearchPage Exchange {i + 1} - User: {exchange.Query}");
+                    Console.WriteLine($"[DEBUG] SearchPage Exchange {i + 1} - Assistant: {exchange.Response}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("[DEBUG] SearchPage sending no conversation history");
+            }
+            
             // Perform search with context
             var response = await ApiService.SearchAsync(searchQuery.Trim(), 8, context);
             if (response.Success && response.Data != null)

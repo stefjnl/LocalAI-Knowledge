@@ -308,7 +308,7 @@ public class Program
             }
         });
 
-        app.MapPost("/api/search", async (SearchRequest request, IVectorSearchService vectorSearch, IRAGService ragService) =>
+        app.MapPost("/api/search", async (SearchRequest request, IVectorSearchService vectorSearch, IRAGService ragService, ILogger<Program> logger) =>
         {
             try
             {
@@ -317,7 +317,22 @@ public class Program
                     return Results.BadRequest("Query cannot be empty");
                 }
 
-                // Start timing
+                // Log incoming request details
+                logger.LogInformation("[DEBUG] Search API received request: {Query}", request.Query);
+                if (request.Context != null && request.Context.Any())
+                {
+                    logger.LogInformation("[DEBUG] Search API received conversation history: {Count} exchanges", request.Context.Count);
+                    for (int i = 0; i < request.Context.Count; i++)
+                    {
+                        var exchange = request.Context[i];
+                        logger.LogInformation("[DEBUG] Exchange {Index} - User: {Query}", i + 1, exchange.Query);
+                        logger.LogInformation("[DEBUG] Exchange {Index} - Assistant: {Response}", i + 1, exchange.Response);
+                    }
+                }
+                else
+                {
+                    logger.LogInformation("[DEBUG] Search API received no conversation history");
+                }
                 var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
                 var searchStopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -349,17 +364,11 @@ public class Program
 
                 // Add context to the query if available
                 var queryWithContext = request.Query;
-                if (request.Context != null && request.Context.Any())
-                {
-                    // Take the last 3 exchanges for context
-                    var recentContext = request.Context.TakeLast(3);
-                    var contextText = string.Join("\n", recentContext.Select(ex => $"Previous question: {ex.Query}\nPrevious answer: {ex.Response}"));
-                    queryWithContext = $"{contextText}\n\nCurrent question: {request.Query}";
-                }
-
-                // Generate RAG response with timing
+                var context = request.Context ?? new List<ConversationExchange>();
+                
+                // Generate RAG response with timing, passing conversation context
                 var generationStopwatch = System.Diagnostics.Stopwatch.StartNew();
-                var ragResponse = await ragService.GenerateResponseAsync(queryWithContext, searchResults.Take(5).ToList());
+                var ragResponse = await ragService.GenerateResponseAsync(request.Query, searchResults.Take(5).ToList(), context);
                 generationStopwatch.Stop();
                 var generationTime = generationStopwatch.ElapsedMilliseconds;
 
@@ -466,7 +475,7 @@ public class Program
 }
 
 // DTOs for API
-public record SearchRequest(string Query, int? Limit = 8, List<ConversationExchange>? Context = null);
+public record SearchRequest(string Query, int? Limit = 8, List<LocalAI.Core.Models.ConversationExchange>? Context = null);
 
 public record SearchResponse
 {
@@ -475,12 +484,6 @@ public record SearchResponse
     public string RAGResponse { get; set; } = string.Empty;
     public List<LocalAI.Core.Models.SearchResult> Sources { get; set; } = new();
     public TimingInfo Timing { get; set; } = new();
-}
-
-public record ConversationExchange
-{
-    public string Query { get; set; } = string.Empty;
-    public string Response { get; set; } = string.Empty;
 }
 
 public record TimingInfo
