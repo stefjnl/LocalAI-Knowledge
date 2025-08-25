@@ -16,7 +16,7 @@ main {
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
 .top-row {
@@ -52,6 +52,10 @@ main {
 
     .top-row ::deep a, .top-row ::deep .btn-link {
         margin-left: 0;
+    }
+    
+    .page {
+        background-color: #f1f5f9;
     }
 }
 
@@ -102,3 +106,12 @@ main {
         top: 0.5rem;
         color: #92400e;
     }
+
+/* Enhanced content styling */
+article {
+    padding: 0 !important;
+}
+
+.content {
+    padding: 0 !important;
+}

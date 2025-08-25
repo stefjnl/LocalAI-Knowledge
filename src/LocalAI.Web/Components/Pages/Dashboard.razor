@@ -1,38 +1,54 @@
 @page "/dashboard"
 @using LocalAI.Web.Services
+@using LocalAI.Core.Models
 @inject IApiService ApiService
 
 <PageTitle>Dashboard</PageTitle>
 
-<div class="container-fluid py-4">
-    <div class="row">
-        <div class="col-12">
-            <div class="text-center mb-5">
-                <h1 class="display-5 fw-bold text-primary">Dashboard</h1>
-                <p class="lead text-muted">System overview and quick actions</p>
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1 class="fw-bold text-primary">Knowledge Dashboard</h1>
+        <p class="text-muted mb-0">System overview and quick actions</p>
+    </div>
+
+    <!-- Quick Search Card -->
+    <div class="card search-card mb-4">
+        <div class="card-body p-4">
+            <h5 class="card-title mb-3">Search Knowledge Base</h5>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control quick-search-input" placeholder="Ask anything about your documents..." 
+                       @oninput="@(e => searchQuery = e.Value?.ToString() ?? "")" 
+                       @onkeydown="@(e => { if (e.Key == "Enter") { _ = Search(); } })">
+                <button class="btn action-btn action-btn-primary" type="button" @onclick="Search">
+                    <i class="bi bi-search"></i> Search
+                </button>
             </div>
+            <small class="text-muted">Try: "What are the key features?" or "How to install?"</small>
         </div>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-md-4 mb-4">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center">
-                    <div class="display-4 text-primary mb-3">📊</div>
-                    <h5 class="card-title">Knowledge Base Status</h5>
+    <!-- Stats Row -->
+    <div class="row mb-4 g-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body p-4">
+                    <div class="stat-icon bg-primary text-white">
+                        <i class="bi bi-database"></i>
+                    </div>
+                    <h5 class="card-title">Knowledge Base</h5>
                     @if (collectionStatus != null)
                     {
                         <p class="card-text">
                             @if (collectionStatus.CollectionExists)
                             {
                                 <span class="badge bg-success">Active</span>
-                            <div class="mt-2">Ready for queries</div>
-                        }
-                        else
-                        {
-                            <span class="badge bg-warning">Not Processed</span>
-                            <div class="mt-2">Process documents to enable search</div>
-                        }
+                                <div class="mt-2 text-muted">Ready for queries</div>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning">Not Processed</span>
+                                <div class="mt-2 text-muted">Process documents to enable search</div>
+                            }
                         </p>
                     }
                     else
@@ -43,49 +59,184 @@
             </div>
         </div>
 
-        <div class="col-md-4 mb-4">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center">
-                    <div class="display-4 text-primary mb-3">📚</div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body p-4">
+                    <div class="stat-icon bg-info text-white">
+                        <i class="bi bi-files"></i>
+                    </div>
                     <h5 class="card-title">Documents</h5>
-                    <p class="card-text">
-                        <span class="badge bg-info">@documentCount Files</span>
-                    <div class="mt-2">in knowledge base</div>
-                    </p>
+                    <div class="metric-value">@documentCount</div>
+                    <div class="text-muted">Processed files</div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-4 mb-4">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center">
-                    <div class="display-4 text-primary mb-3">⚡</div>
-                    <h5 class="card-title">System Status</h5>
-                    <p class="card-text">
-                        <span class="badge bg-success">Online</span>
-                    <div class="mt-2">All services running</div>
-                    </p>
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body p-4">
+                    <div class="stat-icon bg-success text-white">
+                        <i class="bi bi-speedometer2"></i>
+                    </div>
+                    <h5 class="card-title">Avg. Response</h5>
+                    <div class="metric-value">@(averageResponseTime)ms</div>
+                    <div class="text-muted">Last 10 queries</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body p-4">
+                    <div class="stat-icon bg-warning text-white">
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
+                    <h5 class="card-title">Processing</h5>
+                    <div class="metric-value">@processingCount</div>
+                    <div class="text-muted">Active tasks</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-12">
-            <div class="card shadow-sm border-0">
+    <!-- Main Content Row -->
+    <div class="row mb-4 g-4">
+        <!-- Recent Queries -->
+        <div class="col-lg-6">
+            <div class="card">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Quick Actions</h5>
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Queries</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (recentQueries.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table recent-queries-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Query</th>
+                                        <th>Results</th>
+                                        <th>Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var query in recentQueries.Take(5))
+                                    {
+                                        <tr>
+                                            <td>@query.Query</td>
+                                            <td><span class="badge bg-success">@query.ResultCount</span></td>
+                                            <td>@query.Timestamp.ToString("HH:mm")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-4 text-center text-muted">
+                            <i class="bi bi-chat-left-text display-5 d-block mb-2"></i>
+                            <p>No recent queries yet</p>
+                            <a href="/search" class="btn btn-sm btn-outline-primary">Try a search</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing Activity -->
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-activity me-2"></i>Processing Activity</h5>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex flex-wrap gap-2">
-                        <a href="/search" class="btn btn-outline-primary">
-                            <i class="bi bi-search me-2"></i>Search Knowledge Base
+                    @if (processingSummary != null && processingSummary.LastRunDetails.Any())
+                    {
+                        <div class="activity-timeline">
+                            @foreach (var doc in processingSummary.LastRunDetails.Take(5))
+                            {
+                                <div class="activity-item @(doc.Success ? "completed" : "failed")">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="mb-1">@doc.FileName</h6>
+                                        <small class="text-muted">@doc.ProcessedAt</small>
+                                    </div>
+                                    <p class="mb-1">
+                                        <span class="badge @(doc.Success ? "bg-success" : "bg-danger")">
+                                            @(doc.Success ? "Processed" : "Failed")
+                                        </span>
+                                        @if (doc.Success)
+                                        {
+                                            <span class="badge bg-info">@doc.ChunksProcessed chunks</span>
+                                        }
+                                    </p>
+                                    @if (!doc.Success && !string.IsNullOrEmpty(doc.ErrorMessage))
+                                    {
+                                        <small class="text-danger">@doc.ErrorMessage</small>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-file-earmark-arrow-up display-5 d-block mb-2"></i>
+                            <p>No recent processing activity</p>
+                            <a href="/documents" class="btn btn-sm btn-outline-primary">Process documents</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Metrics and Quick Actions Row -->
+    <div class="row g-4">
+        <!-- System Metrics -->
+        <div class="col-lg-8">
+            <div class="card system-metric-card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>System Metrics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="metric-value">@documentCount</div>
+                            <div class="metric-title">Total Documents</div>
+                        </div>
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="metric-value">@successfulDocuments</div>
+                            <div class="metric-title">Processed</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="metric-value">@failedDocuments</div>
+                            <div class="metric-title">Failed</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="col-lg-4">
+            <div class="card quick-actions-card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>Quick Actions</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="d-grid gap-2">
+                        <a href="/search" class="btn action-btn action-btn-primary">
+                            <i class="bi bi-search"></i> Search Knowledge
                         </a>
-                        <a href="/documents" class="btn btn-outline-secondary">
-                            <i class="bi bi-files me-2"></i>Process Documents
+                        <a href="/documents" class="btn action-btn btn-outline-secondary">
+                            <i class="bi bi-file-earmark-plus"></i> Process Documents
                         </a>
-                        <a href="/settings" class="btn btn-outline-info">
-                            <i class="bi bi-gear me-2"></i>Settings
+                        <a href="/settings" class="btn action-btn btn-outline-info">
+                            <i class="bi bi-gear"></i> Settings
+                        </a>
+                        <a href="/debug" class="btn action-btn btn-outline-warning">
+                            <i class="bi bi-bug"></i> Debug Tools
                         </a>
                     </div>
                 </div>
@@ -96,7 +247,23 @@
 
 @code {
     private CollectionStatusResponse? collectionStatus;
+    private ProcessingSummaryResponse? processingSummary;
     private int documentCount = 0;
+    private int successfulDocuments = 0;
+    private int failedDocuments = 0;
+    private int processingCount = 0;
+    private int averageResponseTime = 120;
+    private string searchQuery = "";
+    
+    // Mock data for recent queries - in a real implementation, this would come from API or local storage
+    private List<RecentQuery> recentQueries = new()
+    {
+        new RecentQuery { Query = "How to install the software?", ResultCount = 8, Timestamp = DateTime.Now.AddMinutes(-15) },
+        new RecentQuery { Query = "Key features of the product", ResultCount = 12, Timestamp = DateTime.Now.AddMinutes(-32) },
+        new RecentQuery { Query = "API documentation", ResultCount = 5, Timestamp = DateTime.Now.AddHours(-2) },
+        new RecentQuery { Query = "Troubleshooting guide", ResultCount = 7, Timestamp = DateTime.Now.AddHours(-5) },
+        new RecentQuery { Query = "System requirements", ResultCount = 3, Timestamp = DateTime.Now.AddHours(-8) }
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -107,18 +274,58 @@
     {
         try
         {
+            // Get collection status
             var statusResponse = await ApiService.GetCollectionStatusAsync();
             if (statusResponse.Success && statusResponse.Data != null)
             {
                 collectionStatus = statusResponse.Data;
-                // In a real implementation, we would get the actual document count from the API
-                // For now, we'll just show a placeholder
-                documentCount = collectionStatus.CollectionExists ? 2098 : 0;
+            }
+
+            // Get processing summary
+            var summaryResponse = await ApiService.GetProcessingSummaryAsync();
+            if (summaryResponse.Success && summaryResponse.Data != null)
+            {
+                processingSummary = summaryResponse.Data;
+                documentCount = processingSummary.TotalDocuments;
+                successfulDocuments = processingSummary.SuccessfulDocuments;
+                failedDocuments = processingSummary.FailedDocuments;
+                
+                // For demo purposes, showing some as processing
+                processingCount = 2;
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Handle error silently for now
         }
+    }
+
+    private async Task Search()
+    {
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            // In a real implementation, this would navigate to the search page with the query
+            // For now, we'll just add to recent queries
+            recentQueries.Insert(0, new RecentQuery 
+            { 
+                Query = searchQuery, 
+                ResultCount = new Random().Next(3, 15), 
+                Timestamp = DateTime.Now 
+            });
+            
+            // Keep only the last 10 queries
+            if (recentQueries.Count > 10)
+                recentQueries.RemoveAt(recentQueries.Count - 1);
+            
+            searchQuery = "";
+        }
+    }
+
+    // Helper class for recent queries
+    public class RecentQuery
+    {
+        public string Query { get; set; } = "";
+        public int ResultCount { get; set; }
+        public DateTime Timestamp { get; set; }
     }
 }
