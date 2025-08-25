@@ -28,7 +28,7 @@
                 <button class="close-sidebar-btn" @onclick="ToggleSidebar">✕</button>
             </div>
             <div class="sidebar-content">
-                <button class="new-chat-btn" @onclick="StartNewChat">
+                <button class="new-chat-btn" @onclick="() => StartNewChat()">
                     <span>+</span> New Chat
                 </button>
                 <div class="conversations-list">
@@ -536,35 +536,11 @@
             // Add immediate feedback
             StateHasChanged();
 
-            // If we have a current conversation and conversation history, save it
-            if (currentConversation != null && conversationHistory.Any())
-            {
-                Console.WriteLine($"Saving {conversationHistory.Count} messages to conversation {currentConversation.Id}");
-                
-                // Save all messages in the current conversation
-                foreach (var item in conversationHistory)
-                {
-                    Console.WriteLine($"Saving user message: {item.Query}");
-                    // Add user message
-                    var userResponse = await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", item.Query);
-                    if (!userResponse.Success)
-                    {
-                        Console.WriteLine($"Failed to save user message: {userResponse.Error}");
-                    }
-
-                    Console.WriteLine($"Saving assistant message: {item.Response}");
-                    // Add assistant message
-                    var assistantResponse = await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", item.Response);
-                    if (!assistantResponse.Success)
-                    {
-                        Console.WriteLine($"Failed to save assistant message: {assistantResponse.Error}");
-                    }
-                }
-            }
-            else
-            {
-                Console.WriteLine("No current conversation or history to save");
-            }
+            // Messages are already saved to the current conversation in the PerformSearch method.
+            // All we need to do here is create a new conversation and refresh the list.
+            Console.WriteLine(currentConversation != null && conversationHistory.Any()
+                ? $"Finalizing conversation {currentConversation.Id} before starting a new one."
+                : "No active conversation to save, starting a new one.");
 
             // Create a new conversation
             Console.WriteLine("Creating new conversation");
