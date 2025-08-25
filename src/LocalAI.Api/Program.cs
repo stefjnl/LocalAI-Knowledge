@@ -19,6 +19,11 @@ public class Program
         if (File.Exists(envPath))
         {
             Env.Load(envPath);
+            Console.WriteLine($"[INFO] Loaded environment variables from: {envPath}");
+        }
+        else
+        {
+            Console.WriteLine($"[WARN] .env file not found at: {envPath}");
         }
 
         // Add configuration from both local and root
@@ -27,6 +32,17 @@ public class Program
             .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
             .AddJsonFile(Path.Combine(rootPath, "appsettings.json"), optional: true, reloadOnChange: true)
             .AddEnvironmentVariables();
+            
+        // Debug: Print out the OpenRouter API key (masked) to verify it's loaded
+        var openRouterKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? "NOT SET";
+        if (openRouterKey != "NOT SET" && openRouterKey.Length > 10)
+        {
+            Console.WriteLine($"[INFO] OpenRouter API Key loaded: {openRouterKey.Substring(0, 5)}...{openRouterKey.Substring(openRouterKey.Length - 5)}");
+        }
+        else
+        {
+            Console.WriteLine($"[WARN] OpenRouter API Key: {openRouterKey}");
+        }
 
         // Add services to the container
         builder.Services.AddEndpointsApiExplorer();

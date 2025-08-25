@@ -154,17 +154,24 @@ The application includes Docker support for easy deployment:
    docker-compose -f docker-compose.infrastructure.yml up -d
    ```
 
-2. **Start application services**:
+2. **Configure environment variables**:
+   Make sure your `.env` file is properly configured with your OpenRouter API key:
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your OpenRouter API key
+   ```
+
+3. **Start application services**:
    ```bash
    docker-compose up -d
    ```
 
-3. **Access services**:
+4. **Access services**:
    - Web UI: http://localhost:7001
    - API: http://localhost:7190
    - Qdrant: http://localhost:6333
 
-**Note**: The default configuration uses OpenRouter for the RAG service. Make sure to set your OpenRouter API key in the environment variables.
+**Note**: The default configuration uses OpenRouter for the RAG service. Make sure to set your OpenRouter API key in the environment variables. The docker-compose.yml file is configured to pass through environment variables from your host system to the containers.
 
 ## 🔧 Understanding the Code
 
@@ -235,7 +242,7 @@ var response = await ragService.GenerateResponseAsync(query, context);
     "Model": "text-embedding-nomic-embed-text-v2-moe"
   },
   "RAGService": {
-    "BaseUrl": "http://localhost:1234", 
+    "BaseUrl": "https://openrouter.ai/api/v1", 
     "Model": "openrouter/qwen/qwen-3"
   },
   "Qdrant": {
@@ -260,7 +267,7 @@ var response = await ragService.GenerateResponseAsync(query, context);
 - **Models**: Easily swap models by changing the model name
 - **Paths**: Configurable document source directories
 - **Collection**: Qdrant collection name for vector storage
-- **OpenRouter**: Configuration for code assistant features (requires API key)
+- **OpenRouter**: Configuration for enhanced code assistant features (requires API key)
 
 ### Environment Variables
 

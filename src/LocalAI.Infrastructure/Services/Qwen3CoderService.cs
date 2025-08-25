@@ -25,16 +25,28 @@ namespace LocalAI.Infrastructure.Services
         public async Task<string> GenerateCodeResponseAsync(string query, List<ConversationExchange> conversationContext)
         {
             // Try to get API key from environment variable first, then from configuration
-            var apiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? _configuration["OpenRouter:ApiKey"];
+            var apiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? 
+                        System.Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ??
+                        _configuration["OpenRouter:ApiKey"];
             var model = _configuration["OpenRouter:Model"];
             var endpoint = _configuration["OpenRouter:Endpoint"];
 
-            if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(model) || string.IsNullOrEmpty(endpoint))
+            if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(model) || string.IsNullOrEmpty(endpoint) ||
+                apiKey == "YOUR_API_KEY_HERE")
             {
                 return "OpenRouter is not configured. Please check your appsettings.json or environment variables.";
             }
 
+            // Remove any existing auth header first
+            _httpClient.DefaultRequestHeaders.Authorization = null;
+            _httpClient.DefaultRequestHeaders.Remove("Authorization");
+            _httpClient.DefaultRequestHeaders.Remove("HTTP-Referer");
+            _httpClient.DefaultRequestHeaders.Remove("X-Title");
+            
             _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+            // Add OpenRouter specific headers
+            _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", "http://localhost:7001");
+            _httpClient.DefaultRequestHeaders.Add("X-Title", "LocalAI Knowledge Assistant");
 
             var messages = new List<object>();
             messages.Add(new { role = "system", content = "You are a coding assistant. Provide clean, efficient, and well-documented code." });

@@ -34,6 +34,9 @@ RUN mkdir -p /app/data-protection-keys
 # Copy published application
 COPY --from=publish /app/publish .
 
+# Copy environment file
+COPY .env* ./
+
 # Handle shutdown signals properly
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["dotnet", "LocalAI.Web.dll"]

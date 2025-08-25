@@ -7,7 +7,28 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
 // Load environment variables
-Env.Load();
+var rootPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", ".."));
+var envPath = Path.Combine(rootPath, ".env");
+if (File.Exists(envPath))
+{
+    Env.Load(envPath);
+    Console.WriteLine($"[INFO] Loaded environment variables from: {envPath}");
+}
+else
+{
+    Console.WriteLine($"[WARN] .env file not found at: {envPath}");
+}
+
+// Debug: Print out the OpenRouter API key (masked) to verify it's loaded
+var openRouterKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? "NOT SET";
+if (openRouterKey != "NOT SET" && openRouterKey.Length > 10)
+{
+    Console.WriteLine($"[INFO] OpenRouter API Key loaded: {openRouterKey.Substring(0, 5)}...{openRouterKey.Substring(openRouterKey.Length - 5)}");
+}
+else
+{
+    Console.WriteLine($"[WARN] OpenRouter API Key: {openRouterKey}");
+}
 
 // Build configuration
 var configuration = new ConfigurationBuilder()

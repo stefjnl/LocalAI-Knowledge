@@ -11,6 +11,11 @@ services:
       # Connect to external Qdrant service
       - QdrantSettings__Endpoint=http://qdrant-persistent:6333
       - LMStudioSettings__Endpoint=http://host.docker.internal:1234
+      # Pass through environment variables
+      - OPENROUTER_API_KEY
+      - OPENROUTER_MODEL
+      - OPENROUTER_ENDPOINT
+      - OPENROUTER_USE_OPENROUTER
     volumes:
       - ./appsettings.json:/app/appsettings.json:ro
       - ./data:/app/data # Changed: Allow write access for saving conversations
@@ -27,6 +32,11 @@ services:
       - "7001:8080"
     environment:
       - ApiSettings__BaseUrl=http://localai-api:8080
+      # Pass through environment variables
+      - OPENROUTER_API_KEY
+      - OPENROUTER_MODEL
+      - OPENROUTER_ENDPOINT
+      - OPENROUTER_USE_OPENROUTER
     depends_on:
       - localai-api
     volumes:
