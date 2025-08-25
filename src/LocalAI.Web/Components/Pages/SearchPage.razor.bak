@@ -5,7 +5,6 @@
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.Components
 @using System.IO
-@using Markdig
 @inject IApiService ApiService
 @inject IConversationService ConversationService
 @inject IConfiguration Configuration
@@ -148,20 +147,7 @@
                                         @if (searchResponse.Timing != null &&
                                                             !string.IsNullOrEmpty(searchResponse.Timing.FormattedResponseTime))
                                         {
-                                            <div class="response-metadata">
-                                                <div class="response-time">Responded in @searchResponse.Timing.FormattedResponseTime</div>
-                                                @if (searchResponse.Timing.TotalTimeMs > 0)
-                                                {
-                                                    <div class="response-details">
-                                                        <span class="detail-item">Search: @searchResponse.Timing.SearchTimeMs.ToString("F2")ms</span>
-                                                        <span class="detail-item">Generation: @searchResponse.Timing.GenerationTimeMs.ToString("F2")ms</span>
-                                                        @if (searchResponse.Timing.GenerationTimeMs > 0)
-                                                        {
-                                                            <span class="detail-item">Tokens/sec: @((1000 / searchResponse.Timing.GenerationTimeMs).ToString("F1"))</span>
-                                                        }
-                                                    </div>
-                                                }
-                                            </div>
+                                            <div class="response-time">Responded in @searchResponse.Timing.FormattedResponseTime</div>
                                         }
                                         @if (HasSources(searchResponse.RAGResponse))
                                         {
@@ -551,19 +537,7 @@
 
     private string FormatResponse(string response)
     {
-        if (string.IsNullOrEmpty(response))
-            return response;
-
-        // Configure Markdig pipeline for safe HTML rendering
-        var pipeline = new MarkdownPipelineBuilder()
-            .UseAdvancedExtensions()
-            .UseBootstrap()
-            .Build();
-
-        // Convert markdown to HTML
-        var html = Markdown.ToHtml(response, pipeline);
-        
-        return html;
+        return response.Replace("\n", "<br>");
     }
 
     private string GetSourceName(string source)

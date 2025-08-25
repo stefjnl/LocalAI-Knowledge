@@ -4,6 +4,7 @@ using LocalAI.Core.Models;
 using LocalAI.Infrastructure.Services;
 using LocalAI.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace LocalAI.Api;
 
@@ -68,6 +69,13 @@ public class Program
         builder.Services.AddScoped<IRAGService, RAGService>();
         builder.Services.AddScoped<IDisplayService, DisplayService>();
         builder.Services.AddScoped<LocalAI.Core.Interfaces.IConversationService, LocalAI.Infrastructure.Services.FileBasedConversationService>();
+
+        // Add logging
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddConsole();
+            logging.SetMinimumLevel(LogLevel.Debug);
+        });
 
         // Register the Code Assistant Service
         // If OpenRouter is configured, use Qwen3CoderService, otherwise use NullCodeAssistantService as fallback
@@ -479,6 +487,231 @@ public class Program
             catch (Exception ex)
             {
                 return Results.Problem($"Search error: {ex.Message}");
+            }
+        });
+
+        // DEBUG ENDPOINTS
+        app.MapGet("/api/debug/collection-stats", async (IVectorSearchService vectorSearch, ILogger<Program> logger) =>
+        {
+            try
+            {
+                logger.LogInformation("[DEBUG] Collection stats endpoint called");
+                var collectionName = "knowledge"; // Default collection name
+                var exists = await vectorSearch.CollectionExistsAsync(collectionName);
+                
+                if (!exists)
+                {
+                    return Results.Ok(new
+                    {
+                        Success = true,
+                        CollectionExists = false,
+                        Message = "Collection does not exist"
+                    });
+                }
+
+                // Get detailed collection info
+                using var httpClient = new HttpClient();
+                var baseUrl = Environment.GetEnvironmentVariable("QDRANT_BASE_URL") ?? "http://host.docker.internal:6333";
+                var response = await httpClient.GetAsync($"{baseUrl}/collections/{collectionName}");
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    var result = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(responseContent);
+                    
+                    return Results.Ok(new
+                    {
+                        Success = true,
+                        CollectionExists = true,
+                        CollectionInfo = result.GetProperty("result").ToString()
+                    });
+                }
+                
+                return Results.Problem($"Failed to get collection info: {response.StatusCode}");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[DEBUG] Error in collection stats endpoint");
+                return Results.Problem($"Error retrieving collection stats: {ex.Message}");
+            }
+        });
+
+        app.MapGet("/api/debug/documents", (IDocumentProcessor processor, ILogger<Program> logger) =>
+        {
+            try
+            {
+                logger.LogInformation("[DEBUG] Documents endpoint called");
+                var metadata = ((DocumentProcessor)processor).GetAllProcessedDocumentsMetadata();
+                
+                return Results.Ok(new
+                {
+                    Success = true,
+                    Documents = metadata.Select(m => new
+                    {
+                        FileName = m.FileName,
+                        DocumentType = m.DocumentType,
+                        ChunksProcessed = m.ChunksProcessed,
+                        ProcessingDuration = m.FormattedDuration,
+                        ProcessedAt = m.FormattedProcessedAt,
+                        Success = m.Success,
+                        ErrorMessage = m.ErrorMessage
+                    }).ToArray()
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[DEBUG] Error in documents endpoint");
+                return Results.Problem($"Error retrieving documents: {ex.Message}");
+            }
+        });
+
+        app.MapGet("/api/debug/search-chunks/{query}", async (string query, IVectorSearchService vectorSearch, ILogger<Program> logger) =>
+        {
+            try
+            {
+                logger.LogInformation("[DEBUG] Search chunks endpoint called with query: {Query}", query);
+                var queryEmbedding = await ((VectorSearchService)vectorSearch).GenerateEmbeddingAsync(query, isQuery: true);
+
+                // Use optimized search parameters for debugging
+                var searchPayload = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    query = queryEmbedding,
+                    limit = 20, // Get more results for debugging
+                    with_payload = true,
+                    with_vector = false,
+                    @params = new
+                    {
+                        hnsw_ef = 128,
+                        exact = false,
+                        indexed_only = true
+                    }
+                });
+
+                using var httpClient = new HttpClient();
+                var baseUrl = Environment.GetEnvironmentVariable("QDRANT_BASE_URL") ?? "http://host.docker.internal:6333";
+                var collectionName = "knowledge";
+                var searchContent = new StringContent(searchPayload, System.Text.Encoding.UTF8, "application/json");
+                var response = await httpClient.PostAsync($"{baseUrl}/collections/{collectionName}/points/query", searchContent);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return Results.Problem($"Search error: {responseContent}");
+                }
+
+                var searchResult = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(responseContent);
+                var results = searchResult.GetProperty("result").GetProperty("points").EnumerateArray().ToList();
+
+                var searchResults = new List<object>();
+                foreach (var result in results)
+                {
+                    var score = result.GetProperty("score").GetSingle();
+                    var payload = result.GetProperty("payload");
+                    var text = payload.GetProperty("text").GetString() ?? "";
+                    var source = payload.GetProperty("source").GetString() ?? "";
+                    var type = payload.TryGetProperty("type", out var typeElement) ? typeElement.GetString() ?? "" : "transcript";
+                    var pageInfo = payload.TryGetProperty("page_info", out var pageElement) ? pageElement.GetString() ?? "" : "";
+
+                    searchResults.Add(new
+                    {
+                        Content = text,
+                        Source = source,
+                        Score = score,
+                        Type = type,
+                        PageInfo = pageInfo
+                    });
+                }
+
+                return Results.Ok(new
+                {
+                    Success = true,
+                    Query = query,
+                    Results = searchResults
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[DEBUG] Error in search chunks endpoint");
+                return Results.Problem($"Error in search chunks: {ex.Message}");
+            }
+        });
+
+        app.MapGet("/api/debug/document-chunks/{filename}", async (string filename, IVectorSearchService vectorSearch, ILogger<Program> logger) =>
+        {
+            try
+            {
+                logger.LogInformation("[DEBUG] Document chunks endpoint called for filename: {Filename}", filename);
+                
+                // Search for chunks with specific source filename
+                using var httpClient = new HttpClient();
+                var baseUrl = Environment.GetEnvironmentVariable("QDRANT_BASE_URL") ?? "http://host.docker.internal:6333";
+                var collectionName = "knowledge";
+                
+                var filterPayload = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    filter = new
+                    {
+                        must = new[]
+                        {
+                            new
+                            {
+                                key = "source",
+                                match = new
+                                {
+                                    value = filename
+                                }
+                            }
+                        }
+                    },
+                    limit = 100, // Get up to 100 chunks
+                    with_payload = true,
+                    with_vector = false
+                });
+
+                var filterContent = new StringContent(filterPayload, System.Text.Encoding.UTF8, "application/json");
+                var response = await httpClient.PostAsync($"{baseUrl}/collections/{collectionName}/points/scroll", filterContent);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return Results.Problem($"Document chunks error: {responseContent}");
+                }
+
+                var scrollResult = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(responseContent);
+                var points = scrollResult.GetProperty("result").GetProperty("points").EnumerateArray().ToList();
+
+                var chunks = new List<object>();
+                foreach (var point in points)
+                {
+                    var id = point.GetProperty("id").GetInt32();
+                    var payload = point.GetProperty("payload");
+                    var text = payload.GetProperty("text").GetString() ?? "";
+                    var source = payload.GetProperty("source").GetString() ?? "";
+                    var type = payload.TryGetProperty("type", out var typeElement) ? typeElement.GetString() ?? "" : "transcript";
+                    var pageInfo = payload.TryGetProperty("page_info", out var pageElement) ? pageElement.GetString() ?? "" : "";
+
+                    chunks.Add(new
+                    {
+                        Id = id,
+                        Content = text,
+                        Source = source,
+                        Type = type,
+                        PageInfo = pageInfo
+                    });
+                }
+
+                return Results.Ok(new
+                {
+                    Success = true,
+                    Filename = filename,
+                    ChunkCount = chunks.Count,
+                    Chunks = chunks
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[DEBUG] Error in document chunks endpoint");
+                return Results.Problem($"Error retrieving document chunks: {ex.Message}");
             }
         });
 

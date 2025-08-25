@@ -237,6 +237,22 @@
                             <p class="mb-1">@progressMessage</p>
                             <small class="text-muted">@progressDetails</small>
                         </div>
+                        @if (!string.IsNullOrEmpty(currentProcessingFile))
+                        {
+                            <div class="mt-3 p-3 bg-light rounded">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Processing file:</span>
+                                    <span class="fw-bold">@currentProcessingFile</span>
+                                </div>
+                                @if (totalFilesToProcess > 0)
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <span>Progress:</span>
+                                        <span>@currentFileIndex of @totalFilesToProcess files</span>
+                                    </div>
+                                }
+                            </div>
+                        }
                     </div>
                 </div>
             }
@@ -362,6 +378,11 @@
     private IBrowserFile? selectedFile;
     private string searchTerm = "";
     
+    // Processing details
+    private string currentProcessingFile = "";
+    private int totalFilesToProcess = 0;
+    private int currentFileIndex = 0;
+    
     // Document data
     private List<ProcessedDocumentInfo> allProcessedDocuments = new();
     private ProcessedDocumentInfo? selectedDocument;
@@ -458,13 +479,22 @@
         processingComplete = false;
         progressPercentage = 0;
         progressMessage = "Starting new document processing...";
-        progressDetails = "Initializing services";
+        progressDetails = "Scanning for new documents to process";
+        currentProcessingFile = "";
+        totalFilesToProcess = 0;
+        currentFileIndex = 0;
         processedChunks = 0;
         statusMessage = "";
+        
+        StateHasChanged(); // Update UI immediately
 
         try
         {
             Logger.LogInformation("Calling API to process new documents");
+            progressMessage = "Processing new documents...";
+            progressDetails = "This may take several minutes depending on the number and size of documents";
+            StateHasChanged();
+            
             var response = await ApiService.ProcessNewDocumentsAsync();
             Logger.LogInformation("Received API response for new document processing");
 
@@ -475,6 +505,7 @@
                 statusMessage = response.Data.Message;
                 progressMessage = "Processing complete!";
                 progressDetails = $"Processed {processedChunks} new document chunks";
+                currentProcessingFile = "";
                 progressPercentage = 100;
                 Logger.LogInformation($"New document processing completed successfully. Processed {processedChunks} chunks");
 
@@ -484,18 +515,23 @@
             else
             {
                 statusMessage = $"Error: {response.Error}";
+                progressMessage = "Processing failed";
+                progressDetails = response.Error;
                 Logger.LogWarning("New document processing failed: {0}", response.Error);
             }
         }
         catch (Exception ex)
         {
             statusMessage = $"Error: {ex.Message}";
+            progressMessage = "Processing failed";
+            progressDetails = ex.Message;
             Logger.LogError(ex, "Unexpected error during new document processing");
         }
         finally
         {
             isProcessing = false;
             processingType = "";
+            StateHasChanged();
         }
     }
 
@@ -506,13 +542,22 @@
         processingComplete = false;
         progressPercentage = 0;
         progressMessage = $"Starting {type} document processing...";
-        progressDetails = "Initializing services";
+        progressDetails = "Scanning documents to process";
+        currentProcessingFile = "";
+        totalFilesToProcess = 0;
+        currentFileIndex = 0;
         processedChunks = 0;
         statusMessage = "";
+        
+        StateHasChanged(); // Update UI immediately
 
         try
         {
             Logger.LogInformation("Calling API to process documents");
+            progressMessage = $"Processing {type} documents...";
+            progressDetails = "This may take several minutes depending on the number and size of documents";
+            StateHasChanged();
+            
             var response = await ApiService.ProcessDocumentsAsync();
             Logger.LogInformation("Received API response for document processing");
 
@@ -523,6 +568,7 @@
                 statusMessage = response.Data.Message;
                 progressMessage = "Processing complete!";
                 progressDetails = $"Processed {processedChunks} document chunks";
+                currentProcessingFile = "";
                 progressPercentage = 100;
                 Logger.LogInformation($"Document processing completed successfully. Processed {processedChunks} chunks");
 
@@ -532,18 +578,23 @@
             else
             {
                 statusMessage = $"Error: {response.Error}";
+                progressMessage = "Processing failed";
+                progressDetails = response.Error;
                 Logger.LogWarning("Document processing failed: {0}", response.Error);
             }
         }
         catch (Exception ex)
         {
             statusMessage = $"Error: {ex.Message}";
+            progressMessage = "Processing failed";
+            progressDetails = ex.Message;
             Logger.LogError(ex, "Unexpected error during document processing");
         }
         finally
         {
             isProcessing = false;
             processingType = "";
+            StateHasChanged();
         }
     }
 
@@ -552,6 +603,8 @@
         Logger.LogInformation("Starting reprocessing of document: {0}", document.FileName);
         processingType = "reprocess";
         isProcessing = true;
+        progressMessage = $"Reprocessing document...";
+        progressDetails = $"File: {document.FileName}";
         StateHasChanged();
 
         try
@@ -562,23 +615,27 @@
             
             if (response.Success && response.Data != null)
             {
+                statusMessage = $"✅ Successfully reprocessed document";
                 Logger.LogInformation("Document reprocessing completed successfully");
                 // Reload data to show updated status
                 await LoadProcessingData();
             }
             else
             {
+                statusMessage = $"Error reprocessing document: {response.Error}";
                 Logger.LogWarning("Document reprocessing failed: {0}", response.Error);
             }
         }
         catch (Exception ex)
         {
+            statusMessage = $"Error reprocessing document: {ex.Message}";
             Logger.LogError(ex, "Unexpected error during document reprocessing");
         }
         finally
         {
             isProcessing = false;
             processingType = "";
+            StateHasChanged();
         }
     }
 
