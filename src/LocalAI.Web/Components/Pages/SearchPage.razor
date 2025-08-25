@@ -109,7 +109,7 @@
                             </div>
                         }
 
-                        @if (searchResponse != null)
+                        @if (searchResponse != null && !conversationHistory.Any(ch => ch.Query == searchResponse.Query))
                         {
                             <div class="message user-message">
                                 <div class="message-avatar user-avatar">
@@ -249,7 +249,7 @@
     private HashSet<LocalAI.Core.Models.SearchResult> expandedSources = new HashSet<LocalAI.Core.Models.SearchResult>();
     private List<ConversationHistoryItem> conversationHistory = new List<ConversationHistoryItem>();
     private ElementReference chatContainer;
-    private bool areSourcesVisible = true;
+    private bool areSourcesVisible = false;
     
     // Chat management properties
     private List<LocalAI.Core.Models.ChatConversationSummary> conversations = new List<LocalAI.Core.Models.ChatConversationSummary>();
@@ -367,6 +367,9 @@
 
                 // Refresh conversation history
                 conversationHistory = await ConversationService.GetConversationHistoryAsync();
+                
+                // Clear searchResponse to avoid duplication
+                searchResponse = null;
             }
             else
             {
