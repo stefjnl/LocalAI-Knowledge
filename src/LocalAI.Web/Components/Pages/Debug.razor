@@ -1,0 +1,485 @@
+@page "/debug"
+@using LocalAI.Web.Services
+@using Microsoft.Extensions.Logging
+@inject IApiService ApiService
+@inject ILogger<Debug> Logger
+@rendermode @(new InteractiveServerRenderMode())
+
+<PageTitle>Debug Tools</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                <h1 class="display-5 fw-bold text-primary">🔍 Debug Tools</h1>
+                <p class="lead text-muted">Diagnostic tools for troubleshooting document processing and search issues</p>
+            </div>
+
+            <!-- Collection Stats -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">📊 Collection Statistics</h5>
+                    <button type="button" class="btn btn-light btn-sm" @onclick="LoadCollectionStats">
+                        <span>🔄 Refresh</span>
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (isCollectionStatsLoading)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading collection statistics...</p>
+                        </div>
+                    }
+                    else if (collectionStats != null)
+                    {
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Collection Information</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td><strong>Exists:</strong></td>
+                                        <td>
+                                            @if (collectionStats.CollectionExists)
+                                            {
+                                                <span class="badge bg-success">Yes</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-danger">No</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                    @if (collectionStats.CollectionExists && !string.IsNullOrEmpty(collectionStats.CollectionInfo))
+                                    {
+                                        <tr>
+                                            <td><strong>Details:</strong></td>
+                                            <td>
+                                                <pre style="max-height: 200px; overflow-y: auto;">@collectionStats.CollectionInfo</pre>
+                                            </td>
+                                        </tr>
+                                    }
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(collectionStatsError))
+                    {
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i> @collectionStatsError
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Processed Documents -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">📚 Processed Documents</h5>
+                    <div class="d-flex align-items-center">
+                        <input type="text" class="form-control form-control-sm me-2" placeholder="Search documents..." @bind="documentsSearchTerm" />
+                        <button type="button" class="btn btn-light btn-sm" @onclick="LoadProcessedDocuments">
+                            <span>🔄 Refresh</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (isDocumentsLoading)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading processed documents...</p>
+                        </div>
+                    }
+                    else if (processedDocuments != null)
+                    {
+                        var filteredDocuments = processedDocuments.Where(d => 
+                            string.IsNullOrEmpty(documentsSearchTerm) || 
+                            d.FileName.Contains(documentsSearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Document</th>
+                                        <th>Type</th>
+                                        <th>Chunks</th>
+                                        <th>Processed</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var doc in filteredDocuments)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <i class="bi bi-file-earmark-text me-2 text-primary"></i>
+                                                    <div>
+                                                        <div class="fw-bold">@doc.FileName</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>@doc.DocumentType</td>
+                                            <td>
+                                                <span class="badge bg-info">@doc.ChunksProcessed</span>
+                                            </td>
+                                            <td>
+                                                <small>@doc.ProcessedAt</small>
+                                            </td>
+                                            <td>
+                                                @if (doc.Success)
+                                                {
+                                                    <span class="badge bg-success">Processed</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger" title="@doc.ErrorMessage">Failed</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowDocumentChunks(doc.FileName)">
+                                                    <i class="bi bi-search"></i> Chunks
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        @if (!filteredDocuments.Any())
+                        {
+                            <div class="text-center py-3">
+                                <i class="bi bi-folder text-muted" style="font-size: 2rem;"></i>
+                                <p class="mt-2 mb-0 text-muted">No documents found matching your search</p>
+                            </div>
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(documentsError))
+                    {
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i> @documentsError
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Raw Search -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">🔍 Raw Search Debug</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="searchQuery" class="form-label">Search Query</label>
+                        <input type="text" class="form-control" id="searchQuery" placeholder="Enter search query..." @bind="searchQuery" />
+                    </div>
+                    <button type="button" class="btn btn-warning" @onclick="PerformRawSearch" disabled="@isSearchLoading || string.IsNullOrEmpty(searchQuery)">
+                        @if (isSearchLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Searching...</span>
+                        }
+                        else
+                        {
+                            <span>🔍 Search Chunks</span>
+                        }
+                    </button>
+                    
+                    @if (isSearchLoading)
+                    {
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-warning" role="status">
+                                <span class="visually-hidden">Searching...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (searchResults != null)
+                    {
+                        <div class="mt-3">
+                            <h6>Search Results (@searchResults.Results.Count items)</h6>
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Score</th>
+                                            <th>Source</th>
+                                            <th>Type</th>
+                                            <th>Preview</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var result in searchResults.Results.Take(20))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <span class="badge @(result.Score > 0.7 ? "bg-success" : result.Score > 0.5 ? "bg-warning" : "bg-danger")">
+                                                        @result.Score.ToString("F4")
+                                                    </span>
+                                                </td>
+                                                <td>@result.Source</td>
+                                                <td>@result.Type</td>
+                                                <td>
+                                                    <small>@(result.Content.Length > 100 ? result.Content.Substring(0, 100) + "..." : result.Content)</small>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(searchError))
+                    {
+                        <div class="alert alert-danger mt-3">
+                            <i class="bi bi-exclamation-triangle"></i> @searchError
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Document Chunks Modal -->
+            @if (selectedDocumentChunks != null)
+            {
+                <div class="modal fade show" style="display: block;" tabindex="-1">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header bg-primary text-white">
+                                <h5 class="modal-title">📄 Chunks for @selectedDocumentChunks.Filename</h5>
+                                <button type="button" class="btn-close btn-close-white" @onclick="CloseDocumentChunks"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>Total chunks: @selectedDocumentChunks.ChunkCount</p>
+                                
+                                @if (isDocumentChunksLoading)
+                                {
+                                    <div class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p class="mt-2">Loading document chunks...</p>
+                                    </div>
+                                }
+                                else if (selectedDocumentChunks.Chunks.Any())
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>Type</th>
+                                                    <th>Page Info</th>
+                                                    <th>Content</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var chunk in selectedDocumentChunks.Chunks.Take(50))
+                                                {
+                                                    <tr>
+                                                        <td>@chunk.Id</td>
+                                                        <td>@chunk.Type</td>
+                                                        <td>@chunk.PageInfo</td>
+                                                        <td>
+                                                            <small>@(chunk.Content.Length > 200 ? chunk.Content.Substring(0, 200) + "..." : chunk.Content)</small>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    @if (selectedDocumentChunks.Chunks.Count > 50)
+                                    {
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle"></i> Showing first 50 of @selectedDocumentChunks.ChunkCount chunks
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="text-center py-3">
+                                        <i class="bi bi-file-earmark-x text-muted" style="font-size: 2rem;"></i>
+                                        <p class="mt-2 mb-0 text-muted">No chunks found for this document</p>
+                                    </div>
+                                }
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" @onclick="CloseDocumentChunks">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-backdrop fade show"></div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    // Loading states
+    private bool isCollectionStatsLoading = false;
+    private bool isDocumentsLoading = false;
+    private bool isSearchLoading = false;
+    private bool isDocumentChunksLoading = false;
+    
+    // Data
+    private CollectionStatsResponse? collectionStats;
+    private List<ProcessedDocumentInfo>? processedDocuments;
+    private RawSearchResponse? searchResults;
+    private DocumentChunksResponse? selectedDocumentChunks;
+    
+    // Errors
+    private string collectionStatsError = "";
+    private string documentsError = "";
+    private string searchError = "";
+    
+    // Form fields
+    private string documentsSearchTerm = "";
+    private string searchQuery = "";
+    
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("Debug page initialized");
+        await LoadCollectionStats();
+        await LoadProcessedDocuments();
+    }
+    
+    private async Task LoadCollectionStats()
+    {
+        isCollectionStatsLoading = true;
+        collectionStatsError = "";
+        StateHasChanged();
+        
+        try
+        {
+            var response = await ApiService.GetCollectionStatsAsync();
+            if (response.Success && response.Data != null)
+            {
+                collectionStats = response.Data;
+                Logger.LogInformation("Loaded collection stats");
+            }
+            else
+            {
+                collectionStatsError = response.Error ?? "Unknown error";
+                Logger.LogWarning("Failed to load collection stats: {Error}", collectionStatsError);
+            }
+        }
+        catch (Exception ex)
+        {
+            collectionStatsError = ex.Message;
+            Logger.LogError(ex, "Error loading collection stats");
+        }
+        finally
+        {
+            isCollectionStatsLoading = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task LoadProcessedDocuments()
+    {
+        isDocumentsLoading = true;
+        documentsError = "";
+        StateHasChanged();
+        
+        try
+        {
+            var response = await ApiService.GetProcessedDocumentsAsync();
+            if (response.Success && response.Data != null)
+            {
+                processedDocuments = response.Data.ProcessedFiles.ToList();
+                Logger.LogInformation("Loaded {Count} processed documents", processedDocuments.Count);
+            }
+            else
+            {
+                documentsError = response.Error ?? "Unknown error";
+                Logger.LogWarning("Failed to load processed documents: {Error}", documentsError);
+            }
+        }
+        catch (Exception ex)
+        {
+            documentsError = ex.Message;
+            Logger.LogError(ex, "Error loading processed documents");
+        }
+        finally
+        {
+            isDocumentsLoading = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task PerformRawSearch()
+    {
+        if (string.IsNullOrEmpty(searchQuery)) return;
+        
+        isSearchLoading = true;
+        searchError = "";
+        StateHasChanged();
+        
+        try
+        {
+            var response = await ApiService.PerformRawSearchAsync(searchQuery);
+            if (response.Success && response.Data != null)
+            {
+                searchResults = response.Data;
+                Logger.LogInformation("Raw search completed with {Count} results", searchResults.Results.Count);
+            }
+            else
+            {
+                searchError = response.Error ?? "Unknown error";
+                Logger.LogWarning("Raw search failed: {Error}", searchError);
+            }
+        }
+        catch (Exception ex)
+        {
+            searchError = ex.Message;
+            Logger.LogError(ex, "Error performing raw search");
+        }
+        finally
+        {
+            isSearchLoading = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task ShowDocumentChunks(string filename)
+    {
+        isDocumentChunksLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            var response = await ApiService.GetDocumentChunksAsync(filename);
+            if (response.Success && response.Data != null)
+            {
+                selectedDocumentChunks = response.Data;
+                Logger.LogInformation("Loaded {Count} chunks for document {Filename}", selectedDocumentChunks.ChunkCount, filename);
+            }
+            else
+            {
+                Logger.LogWarning("Failed to load chunks for document {Filename}: {Error}", filename, response.Error ?? "Unknown error");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading document chunks for {Filename}", filename);
+        }
+        finally
+        {
+            isDocumentChunksLoading = false;
+            StateHasChanged();
+        }
+    }
+    
+    private void CloseDocumentChunks()
+    {
+        selectedDocumentChunks = null;
+    }
+}

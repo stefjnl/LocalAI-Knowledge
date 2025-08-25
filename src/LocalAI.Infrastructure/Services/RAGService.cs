@@ -41,14 +41,14 @@ namespace LocalAI.Infrastructure.Services
                 }
             }
 
-            // OPTIMIZATION 1: Truncate and summarize context instead of including everything
+            // Build context from search results - limit to top 5 for token management
             var contextBuilder = new StringBuilder();
             contextBuilder.AppendLine("=== RELEVANT KNOWLEDGE ===\n");
             for (int i = 0; i < Math.Min(searchResults.Count, 5); i++)
             {
                 var result = searchResults[i];
                 contextBuilder.AppendLine($"Source {i + 1}: {result.Source}");
-                contextBuilder.AppendLine($"Content: {result.Content}");  // Full content, no truncation
+                contextBuilder.AppendLine($"Content: {result.Content}");
                 contextBuilder.AppendLine($"Relevance: {result.Score:F2}\n");
             }
 
@@ -61,37 +61,42 @@ namespace LocalAI.Infrastructure.Services
                 conversationContextText = $"\n\n=== CONVERSATION CONTEXT ===\n{contextText}\n\n";
             }
 
-            var systemPrompt = @"You are an expert knowledge assistant. Respond like Claude Sonnet 4 with these characteristics:
+            var systemPrompt = @"You are an expert knowledge assistant that synthesizes information from technical documents, conference transcripts, and developer resources.
 
-                RESPONSE STRUCTURE:
-                - Start with a clear, direct answer to the question
-                - Organize information into logical sections when appropriate
-                - Use practical examples and real-world applications
-                - Provide actionable insights where relevant
-                - Be comprehensive but concise
+RESPONSE APPROACH:
+- Lead with a direct answer to the user's specific question
+- Synthesize information across multiple sources when available
+- Distinguish between established facts and emerging trends/opinions
+- Acknowledge when sources provide incomplete coverage of a topic
 
-                STYLE GUIDELINES:
-                - Use clear, professional language without jargon
-                - Structure complex information with natural flow
-                - Include specific details from the provided sources
-                - When discussing technical concepts, explain practical implications
-                - End with related considerations or next steps if helpful
+SOURCE HANDLING:
+- Base responses strictly on the provided knowledge sources
+- When sources conflict, present the different perspectives clearly
+- If information is insufficient, state what's available and what's missing
+- Prioritize more recent sources for rapidly evolving technical topics
 
-                FORMATTING:
-                - Use natural paragraph breaks for readability
-                - Bold key concepts or important points
-                - Present information in a logical, easy-to-follow sequence
+TECHNICAL COMMUNICATION:
+- Explain concepts clearly without unnecessary jargon
+- Include practical examples and implementation details when available
+- Connect abstract concepts to real-world applications
+- Provide actionable next steps when relevant
 
-                Answer based strictly on the provided knowledge sources. If the sources don't contain enough information for a complete answer, acknowledge this and work with what's available.";
+RESPONSE STRUCTURE:
+- Use natural paragraph organization for complex topics
+- Group related information logically
+- Include specific details and examples from sources
+- End with relevant considerations or related topics when helpful
+
+Quality over formatting: Focus on accurate, useful information rather than stylistic elements.";
 
             var userPrompt = $@"Based on the following knowledge sources, provide a comprehensive answer to the user's question:{conversationContextText}
 
-                KNOWLEDGE SOURCES:
-                {contextBuilder}
+KNOWLEDGE SOURCES:
+{contextBuilder}
 
-                USER QUESTION: {query}
+USER QUESTION: {query}
 
-                Provide a thorough, well-structured response that addresses the question completely while staying true to the source material.";
+Provide a thorough, well-structured response that addresses the question completely while staying true to the source material.";
 
             // Log the final prompt being sent to the LLM
             _logger.LogInformation("[DEBUG] Final LLM Prompt: {Prompt}", userPrompt);
@@ -104,16 +109,16 @@ namespace LocalAI.Infrastructure.Services
                 model = _model,
                 messages = new[]
                 {
-                        new { role = "system", content = systemPrompt },
-                        new { role = "user", content = userPrompt }
-                    },
+            new { role = "system", content = systemPrompt },
+            new { role = "user", content = userPrompt }
+        },
                 stream = false,
-                temperature = 0.3,        // Slightly higher for more natural responses
-                max_tokens = 1500,        // Increased for comprehensive responses
-                top_p = 0.9,
-                frequency_penalty = 0.1,
-                presence_penalty = 0.1,
-                // Add OpenRouter specific parameters
+                temperature = 0.1,        // Lower for factual accuracy
+                max_tokens = 2000,        // Higher for comprehensive responses
+                top_p = 0.95,            // Slightly higher for natural language
+                frequency_penalty = 0.0,  // Removed to avoid penalizing technical terms
+                presence_penalty = 0.0,   // Removed to allow thorough coverage
+                                          // Add OpenRouter specific parameters
                 provider = new
                 {
                     order = new[] { "OpenRouter", "Azure", "LocalAI" }
@@ -132,14 +137,14 @@ namespace LocalAI.Infrastructure.Services
                     _httpClient.DefaultRequestHeaders.Remove("Authorization");
                     _httpClient.DefaultRequestHeaders.Remove("HTTP-Referer");
                     _httpClient.DefaultRequestHeaders.Remove("X-Title");
-                    
+
                     // Get API key from environment or config
-                    var apiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? 
+                    var apiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ??
                                 System.Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ??
                                 "YOUR_API_KEY_HERE"; // This will help us debug if the key isn't set
-                    
+
                     _logger.LogInformation("[DEBUG] Using API Key: {ApiKey}", apiKey.Length > 10 ? apiKey.Substring(0, 5) + "..." + apiKey.Substring(apiKey.Length - 5) : "INVALID");
-                    
+
                     if (!string.IsNullOrEmpty(apiKey) && apiKey != "YOUR_API_KEY_HERE")
                     {
                         _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
@@ -156,7 +161,7 @@ namespace LocalAI.Infrastructure.Services
                 // Determine endpoint based on whether we're using OpenRouter
                 var endpoint = isOpenRouter ? $"{_baseUrl}/chat/completions" : $"{_baseUrl}/v1/chat/completions";
                 _logger.LogInformation("[DEBUG] Sending request to endpoint: {Endpoint}", endpoint);
-                
+
                 var response = await _httpClient.PostAsync(endpoint, content);
                 if (response.IsSuccessStatusCode)
                 {
@@ -177,5 +182,8 @@ namespace LocalAI.Infrastructure.Services
                 return $"❌ Error connecting to LLM: {ex.Message}";
             }
         }
+
     }
 }
+
+

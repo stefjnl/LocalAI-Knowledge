@@ -1,6 +1,7 @@
 ﻿using LocalAI.Core.Interfaces;
 using LocalAI.Core.Models;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text.Json;
 using UglyToad.PdfPig;
@@ -12,14 +13,16 @@ namespace LocalAI.Infrastructure.Services
     public class DocumentProcessor : IDocumentProcessor
     {
         private readonly IEmbeddingService _embeddingService;
+        private readonly ILogger<DocumentProcessor>? _logger;
         private readonly string _transcriptsPath;
         private readonly string _pdfsPath;
         private readonly string _processedFilesPath;
         private readonly string _processingMetadataPath;
 
-        public DocumentProcessor(IEmbeddingService embeddingService, IConfiguration configuration)
+        public DocumentProcessor(IEmbeddingService embeddingService, IConfiguration configuration, ILogger<DocumentProcessor>? logger = null)
         {
             _embeddingService = embeddingService;
+            _logger = logger;
             _transcriptsPath = configuration["DocumentPaths:Transcripts"] ?? "data/transcripts/";
             _pdfsPath = configuration["DocumentPaths:PDFs"] ?? "data/pdfs/";
 
@@ -35,6 +38,7 @@ namespace LocalAI.Infrastructure.Services
                 _processedFilesPath = Path.Combine(metadataPath, "processed_files.json");
                 _processingMetadataPath = Path.Combine(metadataPath, "processing_metadata.json");
                 Console.WriteLine($"Using persistent metadata storage: {metadataPath}");
+                _logger?.LogInformation("Using persistent metadata storage: {MetadataPath}", metadataPath);
             }
             catch (Exception ex)
             {
@@ -43,6 +47,7 @@ namespace LocalAI.Infrastructure.Services
                 _processingMetadataPath = Path.Combine(tmpPath, "processing_metadata.json");
                 Console.WriteLine($"WARNING: Could not use persistent storage ({ex.Message}). Using temporary storage: {tmpPath}");
                 Console.WriteLine("Data will be lost on container restart. Consider mounting a volume to /app/data");
+                _logger?.LogWarning(ex, "Could not use persistent storage. Using temporary storage: {TempPath}. Data will be lost on container restart.", tmpPath);
             }
         }
 
@@ -421,12 +426,19 @@ namespace LocalAI.Infrastructure.Services
 
         public async Task<List<DocumentChunk>> ProcessPdfFileAsync(string filePath)
         {
+            var fileName = Path.GetFileName(filePath);
+            _logger?.LogInformation("Starting PDF processing for file: {FileName}", fileName);
+            
             var pdfContent = ExtractTextFromPdf(filePath);
             var textChunks = SplitIntoChunks(pdfContent.text, 600, 50);
             var chunks = new List<DocumentChunk>();
+            
+            _logger?.LogInformation("Extracted {ChunkCount} chunks from PDF: {FileName}", textChunks.Count, fileName);
 
             foreach (var (chunk, index) in textChunks.Select((c, i) => (c, i)))
             {
+                _logger?.LogDebug("Processing chunk {ChunkIndex}/{TotalChunks} for file: {FileName}", index + 1, textChunks.Count, fileName);
+                
                 var embedding = await _embeddingService.GenerateEmbeddingAsync(chunk);
                 var source = Path.GetFileNameWithoutExtension(filePath);
                 var pageInfo = GetChunkPageInfo(pdfContent.pageBreaks, index, textChunks.Count, chunk, pdfContent.text);
@@ -438,7 +450,15 @@ namespace LocalAI.Infrastructure.Services
                     Source = source,
                     Metadata = $"pdf|{pageInfo}"
                 });
+                
+                // Log progress every 100 chunks
+                if ((index + 1) % 100 == 0)
+                {
+                    _logger?.LogInformation("Processed {ChunkCount} chunks for file: {FileName}", index + 1, fileName);
+                }
             }
+            
+            _logger?.LogInformation("Completed PDF processing for file: {FileName}. Total chunks: {ChunkCount}", fileName, chunks.Count);
 
             return chunks;
         }

@@ -16,6 +16,11 @@ public interface IApiService
     Task<ApiResponse<LastRunResponse>> GetLastRunAsync();
     Task<ApiResponse<ProcessingSummaryResponse>> GetProcessingSummaryAsync();
     
+    // Debug API methods
+    Task<ApiResponse<CollectionStatsResponse>> GetCollectionStatsAsync();
+    Task<ApiResponse<RawSearchResponse>> PerformRawSearchAsync(string query);
+    Task<ApiResponse<DocumentChunksResponse>> GetDocumentChunksAsync(string filename);
+    
     // Conversation API methods
     Task<ApiResponse<List<ChatConversationSummary>>> GetConversationsAsync();
     Task<ApiResponse<ChatConversation>> GetConversationAsync(Guid id);
@@ -265,6 +270,75 @@ public class ApiService : IApiService
         }
     }
 
+    // Debug API methods
+    public async Task<ApiResponse<CollectionStatsResponse>> GetCollectionStatsAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("/api/debug/collection-stats");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<CollectionStatsResponse>(content, _jsonOptions);
+                return new ApiResponse<CollectionStatsResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<CollectionStatsResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<CollectionStatsResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<RawSearchResponse>> PerformRawSearchAsync(string query)
+    {
+        try
+        {
+            var encodedQuery = Uri.EscapeDataString(query);
+            var response = await _httpClient.GetAsync($"/api/debug/search-chunks/{encodedQuery}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<RawSearchResponse>(content, _jsonOptions);
+                return new ApiResponse<RawSearchResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<RawSearchResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<RawSearchResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<DocumentChunksResponse>> GetDocumentChunksAsync(string filename)
+    {
+        try
+        {
+            var encodedFilename = Uri.EscapeDataString(filename);
+            var response = await _httpClient.GetAsync($"/api/debug/document-chunks/{encodedFilename}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<DocumentChunksResponse>(content, _jsonOptions);
+                return new ApiResponse<DocumentChunksResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<DocumentChunksResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<DocumentChunksResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
     // Conversation API methods
     public async Task<ApiResponse<List<ChatConversationSummary>>> GetConversationsAsync()
     {
@@ -500,4 +574,45 @@ public class ApiResponse<T>
     public bool Success { get; set; }
     public T? Data { get; set; }
     public string Error { get; set; } = string.Empty;
+}
+
+// Debug response models
+public record CollectionStatsResponse
+{
+    public bool Success { get; set; }
+    public bool CollectionExists { get; set; }
+    public string? CollectionInfo { get; set; }
+}
+
+public record RawSearchResponse
+{
+    public bool Success { get; set; }
+    public string Query { get; set; } = string.Empty;
+    public List<RawSearchResult> Results { get; set; } = new();
+}
+
+public record RawSearchResult
+{
+    public string Content { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public float Score { get; set; }
+    public string Type { get; set; } = string.Empty;
+    public string PageInfo { get; set; } = string.Empty;
+}
+
+public record DocumentChunksResponse
+{
+    public bool Success { get; set; }
+    public string Filename { get; set; } = string.Empty;
+    public int ChunkCount { get; set; }
+    public List<DocumentChunkInfo> Chunks { get; set; } = new();
+}
+
+public record DocumentChunkInfo
+{
+    public int Id { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string PageInfo { get; set; } = string.Empty;
 }
