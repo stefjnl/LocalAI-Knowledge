@@ -247,6 +247,15 @@ var response = await ragService.GenerateResponseAsync(query, context);
    public class OllamaRAGService : IRAGService
    {
        // Implement Ollama-specific API calls
+       public async Task<string> GenerateResponseAsync(string query, List<SearchResult> searchResults)
+       {
+           // Implementation here
+       }
+       
+       public async Task<string> GenerateResponseAsync(string query, List<SearchResult> searchResults, List<ConversationExchange> conversationContext)
+       {
+           // Implementation here with conversation context
+       }
    }
    ```
 
