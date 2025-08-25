@@ -7,5 +7,6 @@ namespace LocalAI.Core.Interfaces
         Task<bool> CollectionExistsAsync(string collectionName);
         Task StoreDocumentsAsync(IEnumerable<DocumentChunk> chunks);
         Task<List<SearchResult>> SearchAsync(string query, int limit = 5);
+        Task<bool> DeleteDocumentAsync(string documentName);
     }
 }

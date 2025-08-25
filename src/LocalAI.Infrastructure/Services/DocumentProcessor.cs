@@ -153,6 +153,113 @@ namespace LocalAI.Infrastructure.Services
             return allChunks;
         }
 
+        public async Task<List<DocumentChunk>> ProcessNewDocumentsAsync()
+        {
+            var allChunks = new List<DocumentChunk>();
+            var processedFiles = LoadProcessedFiles();
+            var currentRunMetadata = new List<ProcessingMetadata>();
+            var stopwatch = Stopwatch.StartNew();
+
+            // Process only new transcripts
+            if (Directory.Exists(_transcriptsPath))
+            {
+                var transcriptFiles = Directory.GetFiles(_transcriptsPath, "*.txt");
+                foreach (var file in transcriptFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed transcript: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    var chunks = await ProcessTextFileAsync(file);
+                    fileStopwatch.Stop();
+
+                    allChunks.AddRange(chunks);
+                    processedFiles.Add(fileName);
+
+                    // Track metadata for this file
+                    var metadata = new ProcessingMetadata
+                    {
+                        FileName = fileName,
+                        DocumentType = "Transcript",
+                        ChunksProcessed = chunks.Count,
+                        ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                        ProcessedAt = DateTime.UtcNow,
+                        Success = true
+                    };
+                    currentRunMetadata.Add(metadata);
+                    SaveFileMetadata(metadata);
+                }
+            }
+
+            // Process only new PDFs
+            if (Directory.Exists(_pdfsPath))
+            {
+                var pdfFiles = Directory.GetFiles(_pdfsPath, "*.pdf", SearchOption.AllDirectories);
+                foreach (var file in pdfFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed PDF: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessPdfFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "PDF",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing PDF {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "PDF",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                        // Continue with next file instead of failing completely
+                    }
+                }
+            }
+
+            stopwatch.Stop();
+            SaveProcessedFiles(processedFiles);
+            SaveLastRunMetadata(currentRunMetadata, stopwatch.ElapsedMilliseconds);
+
+            return allChunks;
+        }
+
         public List<string> GetProcessedFiles()
         {
             return LoadProcessedFiles().ToList();
@@ -198,6 +305,22 @@ namespace LocalAI.Infrastructure.Services
             allMetadata.Add(metadata);
 
             SaveAllProcessingMetadata(allMetadata);
+        }
+
+        // Public method to delete file metadata
+        public void DeleteFileMetadata(string fileName)
+        {
+            var allMetadata = LoadAllProcessingMetadata();
+            
+            // Remove entry for this file
+            allMetadata.RemoveAll(m => m.FileName == fileName);
+            
+            SaveAllProcessingMetadata(allMetadata);
+            
+            // Also remove from processed files list
+            var processedFiles = LoadProcessedFiles();
+            processedFiles.Remove(fileName);
+            SaveProcessedFiles(processedFiles);
         }
 
         private HashSet<string> LoadProcessedFiles()

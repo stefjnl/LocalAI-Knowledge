@@ -243,6 +243,64 @@ public class Program
             }
         });
 
+        app.MapPost("/api/documents/process-new", async (IDocumentProcessor processor, IVectorSearchService vectorSearch) =>
+        {
+            try
+            {
+                var chunks = await processor.ProcessNewDocumentsAsync();
+                if (chunks.Count > 0)
+                {
+                    await vectorSearch.StoreDocumentsAsync(chunks);
+                    return Results.Ok(new
+                    {
+                        Success = true,
+                        ChunksProcessed = chunks.Count,
+                        Message = $"Successfully processed {chunks.Count} new document chunks"
+                    });
+                }
+
+                return Results.Ok(new
+                {
+                    Success = false,
+                    ChunksProcessed = 0,
+                    Message = "No new documents found to process"
+                });
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error processing new documents: {ex.Message}");
+            }
+        });
+
+        app.MapDelete("/api/documents/{documentName}", async (string documentName, IDocumentProcessor processor, IVectorSearchService vectorSearch) =>
+        {
+            try
+            {
+                // Delete document from vector database
+                var vectorDeleteSuccess = await vectorSearch.DeleteDocumentAsync(documentName);
+                
+                if (vectorDeleteSuccess)
+                {
+                    // Delete metadata
+                    processor.DeleteFileMetadata(documentName);
+                    
+                    return Results.Ok(new
+                    {
+                        Success = true,
+                        Message = $"Successfully deleted document '{documentName}' and its embeddings"
+                    });
+                }
+                else
+                {
+                    return Results.Problem($"Failed to delete document '{documentName}' from vector database");
+                }
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error deleting document: {ex.Message}");
+            }
+        });
+
         app.MapPost("/api/documents/upload", async (HttpRequest request, IDocumentProcessor processor, IVectorSearchService vectorSearch) =>
         {
             try

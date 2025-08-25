@@ -1,24 +1,6 @@
-# Claude Code Configuration for .NET Core Applications
+# Qwen3-coder Configuration for .NET Core Applications
 
 This file configures Qwen.md for .NET Core applications using Docker and Docker Compose.
-
-## Project Structure
-
-```
-├── src/
-│   ├── MyApp.API/
-│   ├── MyApp.Core/
-│   ├── MyApp.Infrastructure/
-│   └── MyApp.Tests/
-├── docker/
-│   ├── Dockerfile
-│   └── docker-compose.yml
-├── scripts/
-├── .dockerignore
-├── .gitignore
-├── MyApp.sln
-└── claude.md
-```
 
 ## Development Environment
 
@@ -31,9 +13,10 @@ This file configures Qwen.md for .NET Core applications using Docker and Docker 
 - **Redis**: Caching layer (containerized)
 
 ### Development Tools
-- **Visual Studio/Rider**: Primary IDE
+- **Visual Studio Code**: Primary IDE
+ - **Visual Studio 2022**: Secondary IDE
 - **dotnet CLI**: Command-line interface for .NET operations
-- **Entity Framework CLI**: Database migrations and scaffolding
+- **Entity Framework**: Database migrations and scaffolding
 - **xUnit**: Unit testing framework
 - **Swagger/OpenAPI**: API documentation
 
