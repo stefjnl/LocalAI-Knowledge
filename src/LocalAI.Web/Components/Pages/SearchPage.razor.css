@@ -185,6 +185,7 @@
     flex-direction: column;
     min-width: 0;
     position: relative;
+    padding-bottom: 120px; /* Space for fixed input area */
 }
 
 .sidebar-toggle {
@@ -610,9 +611,11 @@
     padding: 1rem 1.5rem;
     border-top: 1px solid #e5e5e5;
     background-color: white;
-    position: sticky;
+    position: fixed;
     bottom: 0;
-    z-index: 10;
+    left: 0;
+    right: 0;
+    z-index: 100;
 }
 
 .input-area {

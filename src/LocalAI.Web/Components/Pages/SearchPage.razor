@@ -304,7 +304,7 @@
     private Guid previewedConversationId = Guid.Empty;
     private Dictionary<Guid, string> conversationPreviews = new Dictionary<Guid, string>();
     private bool showExamples = true;
-
+    
     private string showExamplesButtonText => showExamples ? "Hide Examples" : "Show Examples";
 
     protected override async Task OnInitializedAsync()
@@ -456,6 +456,9 @@
                                 }
                                 conversation.Title = title;
                                 currentConversation.Title = title;
+                                
+                                // Refresh the conversation list to show the updated title
+                                await LoadConversations();
                             }
                         }
                     }
@@ -494,6 +497,9 @@
                                 }
                                 conversation.Title = title;
                                 currentConversation.Title = title;
+                                
+                                // Refresh the conversation list to show the updated title
+                                await LoadConversations();
                             }
                         }
                     }
@@ -712,6 +718,18 @@
             return conv.Title;
             
         // Generate title from first message if available
+        // In a real implementation, this would come from the API or be stored locally
+        // For now, we'll just return a truncated version of the title if it's not "New Chat"
+        if (!string.IsNullOrEmpty(conv.Title))
+        {
+            var title = conv.Title;
+            if (title.Length > 30)
+            {
+                title = title.Substring(0, 30) + "...";
+            }
+            return title;
+        }
+            
         return "New Chat";
     }
 
