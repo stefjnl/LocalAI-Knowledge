@@ -1,37 +1,37 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
+﻿<div class="top-nav-container">
+    <div class="nav-brand">
         <a class="navbar-brand" href="">🧠 LocalAI Knowledge</a>
     </div>
-</div>
-
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/dashboard" Match="NavLinkMatch.All">
-                <span class="bi bi-speedometer2" aria-hidden="true"></span> Dashboard
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/search">
-                <span class="bi bi-search" aria-hidden="true"></span> Search
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/documents">
-                <span class="bi bi-files" aria-hidden="true"></span> Documents
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/export">
-                <span class="bi bi-download" aria-hidden="true"></span> Export
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/settings">
-                <span class="bi bi-gear" aria-hidden="true"></span> Settings
-            </NavLink>
-        </div>
-    </nav>
+    
+    <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+    
+    <div class="nav-menu" onclick="document.querySelector('.navbar-toggler').click()">
+        <nav class="nav">
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/dashboard" Match="NavLinkMatch.All">
+                    <span class="bi bi-speedometer2" aria-hidden="true"></span> Dashboard
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/search">
+                    <span class="bi bi-search" aria-hidden="true"></span> Search
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/documents">
+                    <span class="bi bi-files" aria-hidden="true"></span> Documents
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/export">
+                    <span class="bi bi-download" aria-hidden="true"></span> Export
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link" href="/settings">
+                    <span class="bi bi-gear" aria-hidden="true"></span> Settings
+                </NavLink>
+            </div>
+        </nav>
+    </div>
 </div>
