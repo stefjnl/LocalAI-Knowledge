@@ -24,13 +24,14 @@ namespace LocalAI.Infrastructure.Services
 
         public async Task<string> GenerateCodeResponseAsync(string query, List<ConversationExchange> conversationContext)
         {
-            var apiKey = _configuration["OpenRouter:ApiKey"];
+            // Try to get API key from environment variable first, then from configuration
+            var apiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? _configuration["OpenRouter:ApiKey"];
             var model = _configuration["OpenRouter:Model"];
             var endpoint = _configuration["OpenRouter:Endpoint"];
 
             if (string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(model) || string.IsNullOrEmpty(endpoint))
             {
-                return "OpenRouter is not configured. Please check your appsettings.json.";
+                return "OpenRouter is not configured. Please check your appsettings.json or environment variables.";
             }
 
             _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);

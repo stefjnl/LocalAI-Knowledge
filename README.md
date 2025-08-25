@@ -103,6 +103,9 @@ graph TD
 3. **LM Studio** with models loaded:
    - `text-embedding-nomic-embed-text-v2-moe` (embeddings)
    - `qwen2.5-coder-7b-instruct` (chat completions)
+4. **OpenRouter API Key** (optional, for code assistant features):
+   - Sign up at [OpenRouter.ai](https://openrouter.ai/)
+   - Copy `.env.example` to `.env` and add your API key
 
 ### Setup Steps
 
@@ -215,7 +218,7 @@ var response = await ragService.GenerateResponseAsync(query, context);
 // Uses chat completion API for synthesized responses
 ```
 
-## ⚙️ Configuration
+## 🔧 Configuration
 
 ### appsettings.json Structure
 ```json
@@ -235,6 +238,12 @@ var response = await ragService.GenerateResponseAsync(query, context);
   "DocumentPaths": {
     "Transcripts": "data/transcripts/",
     "PDFs": "data/pdfs/"
+  },
+  "OpenRouter": {
+    "UseOpenRouter": false,
+    "ApiKey": "YOUR_API_KEY_HERE",
+    "Model": "openrouter/qwen/qwen-3",
+    "Endpoint": "https://openrouter.ai/api/v1/chat/completions"
   }
 }
 ```
@@ -244,6 +253,25 @@ var response = await ragService.GenerateResponseAsync(query, context);
 - **Models**: Easily swap models by changing the model name
 - **Paths**: Configurable document source directories
 - **Collection**: Qdrant collection name for vector storage
+- **OpenRouter**: Configuration for optional code assistant features (requires API key)
+
+### Environment Variables
+
+For security, API keys and sensitive configuration should be stored in environment variables rather than in appsettings.json. 
+
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and add your actual API keys:
+   ```bash
+   OPENROUTER_API_KEY=your_actual_openrouter_api_key_here
+   ```
+
+3. The application will automatically load these environment variables at startup.
+
+**Note**: The `.env` file is included in `.gitignore` and will not be committed to version control.
 
 ## 🛠️ Development Workflow
 
