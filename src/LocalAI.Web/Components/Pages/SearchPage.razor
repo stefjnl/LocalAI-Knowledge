@@ -20,30 +20,6 @@
 
     <!-- Main Chat Area -->
     <div class="chat-main" @ref="chatContainer">
-        @if (!string.IsNullOrEmpty(statusMessage))
-        {
-            <div class="status-banner @(collectionExists ? "success" : "warning")">
-                <div class="status-content">
-                    <span class="status-icon">@(collectionExists ? "✅" : "⚠️")</span>
-                    <span class="status-text">@statusMessage</span>
-                    @if (!collectionExists)
-                    {
-                        <button class="process-btn" @onclick="ProcessDocuments" disabled="@isProcessing">
-                            @if (isProcessing)
-                            {
-                                <span class="spinner"></span>
-                                <span>Processing...</span>
-                            }
-                            else
-                            {
-                                <span>📚 Process Documents</span>
-                            }
-                        </button>
-                    }
-                </div>
-            </div>
-        }
-
         @if (searchError != "")
         {
             <div class="error-banner">
@@ -60,7 +36,8 @@
                     <div class="welcome-content">
                         <div class="welcome-icon">🧠</div>
                         <h2>Welcome to Your Knowledge Assistant</h2>
-                        <p>Ask anything about your documents and I'll search through your knowledge base to find answers.</p>
+                        <p>Ask anything about your documents and I'll search through your knowledge base to find answers.
+                        </p>
                         <div class="welcome-examples">
                             <div class="example-item">"Tell me about Azure pricing models"</div>
                             <div class="example-item">"What are the key features of .NET 9?"</div>
@@ -114,7 +91,8 @@
                             @if (!string.IsNullOrEmpty(searchResponse.RAGResponse))
                             {
                                 <div class="message-text">@((MarkupString)FormatResponse(searchResponse.RAGResponse))</div>
-                                @if (searchResponse.Timing != null && !string.IsNullOrEmpty(searchResponse.Timing.FormattedResponseTime))
+                                @if (searchResponse.Timing != null &&
+                                                    !string.IsNullOrEmpty(searchResponse.Timing.FormattedResponseTime))
                                 {
                                     <div class="response-time">Responded in @searchResponse.Timing.FormattedResponseTime</div>
                                 }
@@ -200,17 +178,11 @@
                     🗑️
                 </button>
             </div>
-            <textarea class="chat-input" 
-                      placeholder="Ask anything about your knowledge base..." 
-                      @bind="searchQuery" 
-                      @onkeypress="OnKeyPress"
-                      @oninput="OnInput"
-                      disabled="@isSearching"
-                      rows="1">
+            <textarea class="chat-input" placeholder="Ask anything about your knowledge base..." @bind="searchQuery"
+                @onkeypress="OnKeyPress" @oninput="OnInput" disabled="@isSearching" rows="1">
             </textarea>
-            <button class="send-btn" 
-                    @onclick="PerformSearch"
-                    disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
+            <button class="send-btn" @onclick="PerformSearch"
+                disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
                 @if (isSearching)
                 {
                     <span class="spinner"></span>
@@ -328,8 +300,13 @@
     }
 
     @@keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
     }
 
     /* Error Banner */
@@ -412,8 +389,15 @@
     }
 
     @@keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     .user-message {
@@ -754,15 +738,11 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (searchResponse != null)
+        // Scroll to bottom of chat only on first render
+        if (firstRender)
         {
-            searchQuery = "";
-            searchResponse = null;
-            StateHasChanged();
+            await chatContainer.FocusAsync();
         }
-        
-        // Scroll to bottom of chat
-        await chatContainer.FocusAsync();
     }
 
     private async Task CheckCollectionStatus()
@@ -830,7 +810,7 @@
         {
             // Get recent context for the conversation
             var context = await ConversationService.GetRecentContextAsync(3);
-            
+
             // Log context being sent
             Console.WriteLine($"[DEBUG] SearchPage sending request: {searchQuery}");
             if (context != null && context.Any())
@@ -847,16 +827,16 @@
             {
                 Console.WriteLine("[DEBUG] SearchPage sending no conversation history");
             }
-            
+
             // Perform search with context
             var response = await ApiService.SearchAsync(searchQuery.Trim(), 8, context);
             if (response.Success && response.Data != null)
             {
                 searchResponse = response.Data;
-                
+
                 // Add to conversation history
                 await ConversationService.AddToConversationHistoryAsync(searchQuery.Trim(), searchResponse.RAGResponse);
-                
+
                 // Refresh conversation history
                 conversationHistory = await ConversationService.GetConversationHistoryAsync();
             }

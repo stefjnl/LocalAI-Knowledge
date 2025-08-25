@@ -17,14 +17,6 @@
                 <p class="lead text-muted">Process your knowledge base documents for semantic search</p>
             </div>
 
-            @if (!string.IsNullOrEmpty(statusMessage))
-            {
-                <div class="alert @(collectionExists ? "alert-success" : "alert-warning") alert-dismissible fade show"
-                     role="alert">
-                    <strong>@(collectionExists ? "✅" : "⚠️")</strong> @statusMessage
-                </div>
-            }
-
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">Process Documents</h5>
@@ -72,7 +64,7 @@
                     </div>
 
                     <button type="button" class="btn btn-success" @onclick="UploadDocument"
-                            disabled="@(isUploading || selectedFile == null)">
+                        disabled="@(isUploading || selectedFile == null)">
                         @if (isUploading)
                         {
                             <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -140,20 +132,21 @@
                     <div class="card-body">
                         @if (lastRunDocuments.Any())
                         {
-                            <h6>Last Processing Run (@lastRunDocuments.Count documents, @lastRunDocuments.Sum(d => d.ChunksProcessed) chunks):</h6>
-                            <div class="table-responsive mb-4">
-                                <table class="table table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>Document</th>
-                                            <th>Type</th>
-                                            <th>Chunks</th>
-                                            <th>Duration</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var doc in lastRunDocuments)
+                            <h6>Last Processing Run (@lastRunDocuments.Count documents, @lastRunDocuments.Sum(d =>
+                                                        d.ChunksProcessed) chunks):</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Document</th>
+                                    <th>Type</th>
+                                    <th>Chunks</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var doc in lastRunDocuments)
                                         {
                                             <tr>
                                                 <td>@doc.FileName</td>
@@ -179,21 +172,22 @@
 
                         @if (allProcessedDocuments.Any())
                         {
-                            <h6>Total Processed Documents (@allProcessedDocuments.Count documents, @allProcessedDocuments.Sum(d => d.ChunksProcessed) chunks):</h6>
-                            <div class="table-responsive">
-                                <table class="table table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>Document</th>
-                                            <th>Type</th>
-                                            <th>Chunks</th>
-                                            <th>Duration</th>
-                                            <th>Processed At</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var doc in allProcessedDocuments.OrderByDescending(d => d.ProcessedAt))
+                            <h6>Total Processed Documents (@allProcessedDocuments.Count documents, @allProcessedDocuments.Sum(d
+                                                        => d.ChunksProcessed) chunks):</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Document</th>
+                                    <th>Type</th>
+                                    <th>Chunks</th>
+                                    <th>Duration</th>
+                                    <th>Processed At</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var doc in allProcessedDocuments.OrderByDescending(d => d.ProcessedAt))
                                         {
                                             <tr>
                                                 <td>@doc.FileName</td>
@@ -230,8 +224,8 @@
                     <div class="card-body">
                         <div class="progress mb-3" style="height: 25px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
-                                 style="width: @progressPercentage%" aria-valuenow="@progressPercentage" aria-valuemin="0"
-                                 aria-valuemax="100">
+                                style="width: @progressPercentage%" aria-valuenow="@progressPercentage" aria-valuemin="0"
+                                aria-valuemax="100">
                                 @progressPercentage%
                             </div>
                         </div>
@@ -250,7 +244,8 @@
                         <h5 class="mb-0">✅ Processing Complete</h5>
                     </div>
                     <div class="card-body">
-                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.</p>
+                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.
+                        </p>
                         <p>Your knowledge base is now ready for semantic search!</p>
                         <a href="/search" class="btn btn-primary">Start Searching</a>
                     </div>
@@ -323,8 +318,8 @@
             {
                 collectionExists = response.Data.CollectionExists;
                 statusMessage = collectionExists
-                    ? "Knowledge base is ready! You can start searching your documents."
-                    : "Knowledge base not found. Process your documents to enable search.";
+                ? "Knowledge base is ready! You can start searching your documents."
+                : "Knowledge base not found. Process your documents to enable search.";
                 Logger.LogInformation($"Collection status check completed. Collection exists: {collectionExists}");
             }
             else
