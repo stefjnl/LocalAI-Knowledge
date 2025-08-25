@@ -2,7 +2,7 @@
 
 A comprehensive personal AI knowledge assistant that transforms accumulated digital knowledge into an intelligent, searchable system using local LLM hardware for complete privacy and control.
 
-## ?? Project Vision
+## 🎯 Project Vision
 
 Build a NotebookLM-style experience that:
 - **Processes multiple document types** (PDFs, transcripts, notes) into searchable knowledge
@@ -11,51 +11,57 @@ Build a NotebookLM-style experience that:
 - **Maintains source attribution** with page numbers and relevance scores
 - **Scales to large knowledge bases** (1000+ documents, multiple GBs)
 
-## ??? Architecture Overview
+## 🏗️ Architecture Overview
 
 ### Clean Architecture Pattern
 ```
-???????????????????    ????????????????????    ???????????????????
-?   Console App   ??????   Core (Domain)  ?????? Infrastructure  ?
-?  (UI/Entry)     ?    ?  (Interfaces)    ?    ? (Implementation)?
-???????????????????    ????????????????????    ???????????????????
-       ?                         ?                      ?
-       ?                         ?                      ?
-       v                         v                      v
-???????????????????    ????????????????????    ???????????????????
-?   Web UI        ??????   Data           ?????? External       ?
-?  (Blazor)       ?    ?  (Qdrant, etc.)  ?    ? Services       ?
-???????????????????    ????????????????????    ???????????????????
+┌───────────────────┐    ┌───────────────────┐    ┌───────────────────┐
+│   Console App     │    │   Core (Domain)   │    │ Infrastructure    │
+│  (UI/Entry)       │    │  (Interfaces)     │    │ (Implementation)  │
+└───────────────────┘    └───────────────────┘    └───────────────────┘
+       │                         │                      │
+       │                         │                      │
+       ▼                         ▼                      ▼
+┌───────────────────┐    ┌───────────────────┐    ┌───────────────────┐
+│   Web UI          │    │   Data            │    │ External          │
+│  (Blazor)         │    │  (Qdrant, etc.)   │    │ Services          │
+└───────────────────┘    └───────────────────┘    └───────────────────┘
 ```
 
 **Dependencies flow inward**: All outer layers depend on inner layers, not vice versa
 
 ### Core Components
 
-#### ?? **LocalAI.Core** (Domain Layer)
+#### 🔵 **LocalAI.Core** (Domain Layer)
 - **Models**: Data structures (`SearchResult`, `DocumentChunk`, `ChatSession`)
 - **Interfaces**: Service contracts that define what the system can do
 - **No external dependencies** - pure business logic
 
-#### ?? **LocalAI.Infrastructure** (Data Layer)  
+#### 🟢 **LocalAI.Infrastructure** (Data Layer)  
 - **Service Implementations**: Concrete implementations of Core interfaces
 - **External Integrations**: LM Studio, Qdrant, PDF processing
 - **Chat Session Storage**: SQLite database for conversation persistence
 - **Depends on Core** for interfaces
 
-#### ?? **LocalAI.Console** (Presentation Layer)
+#### 🔴 **LocalAI.Console** (Presentation Layer)
 - **Entry Point**: Dependency injection setup and application lifecycle
 - **User Interface**: Interactive console for queries and responses
 - **Depends on Core** for interfaces, **uses Infrastructure** implementations
 
-#### ?? **LocalAI.Web** (Presentation Layer)
+#### 🟡 **LocalAI.Web** (Presentation Layer)
 - **Web Interface**: Blazor Server application with Claude-style chat UI
 - **API Consumption**: Communicates with LocalAI.Api via HttpClient
 - **Conversation Management**: Client-side sessionStorage for temporary history
 - **Responsive Design**: Mobile-friendly layout with modern styling
 - **Depends on Core** for models, **uses Infrastructure** implementations via API
 
-## ?? Service Architecture
+#### 🟣 **LocalAI.Api** (API Layer)
+- **RESTful API**: Exposes document processing and search functionality
+- **Swagger Documentation**: Built-in API documentation at `/swagger`
+- **Chat Session Management**: CRUD operations for conversations
+- **Document Processing API**: Endpoints for processing and uploading documents
+
+## 📡 Service Architecture
 
 ### Core Services
 
@@ -88,7 +94,7 @@ graph TD
     M --> N[User]
 ```
 
-## ?? Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
@@ -120,9 +126,9 @@ graph TD
 4. **Add documents**:
    ```
    data/
-   ??? transcripts/     # .txt files
-   ??? pdfs/           # .pdf files
-       ??? llms/       # LLM-related PDFs
+   ├── transcripts/     # .txt files
+   ├── pdfs/           # .pdf files
+       ├── llms/       # LLM-related PDFs
    ```
 
 5. **Run**:
@@ -131,7 +137,26 @@ graph TD
    dotnet run
    ```
 
-## ?? Understanding the Code
+### Docker Deployment
+
+The application includes Docker support for easy deployment:
+
+1. **Start infrastructure services**:
+   ```bash
+   docker-compose -f docker-compose.infrastructure.yml up -d
+   ```
+
+2. **Start application services**:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Access services**:
+   - Web UI: http://localhost:7001
+   - API: http://localhost:7190
+   - Qdrant: http://localhost:6333
+
+## 🔧 Understanding the Code
 
 ### Document Processing Pipeline
 
@@ -190,7 +215,7 @@ var response = await ragService.GenerateResponseAsync(query, context);
 // Uses chat completion API for synthesized responses
 ```
 
-## ?? Configuration
+## ⚙️ Configuration
 
 ### appsettings.json Structure
 ```json
@@ -220,7 +245,7 @@ var response = await ragService.GenerateResponseAsync(query, context);
 - **Paths**: Configurable document source directories
 - **Collection**: Qdrant collection name for vector storage
 
-## ????? Development Workflow
+## 🛠️ Development Workflow
 
 ### Adding New Document Types
 
@@ -301,7 +326,7 @@ var chunks = await processor.ProcessPdfFileAsync(testDoc);
 Assert.True(chunks.Count > 0);
 ```
 
-## ?? Troubleshooting
+## 🐛 Troubleshooting
 
 ### Common Issues
 
@@ -336,7 +361,7 @@ Assert.True(chunks.Count > 0);
 - Bottleneck is usually embedding generation, not search
 - Increase search limit for better RAG context
 
-## ?? System Metrics
+## 📊 System Metrics
 
 ### Processing Benchmarks
 - **Text files**: ~100 chunks/minute
@@ -351,9 +376,9 @@ Assert.True(chunks.Count > 0);
 - **Optimal**: RTX 5070 Ti+, 64GB RAM
 - **Storage**: SSD recommended for fast document processing
 
-## ??? Roadmap
+## 🗺️ Roadmap
 
-### Phase 1: Foundation ?
+### Phase 1: Foundation ✅
 - [x] Clean Architecture implementation
 - [x] PDF and text processing
 - [x] Local embedding generation
@@ -378,7 +403,7 @@ Assert.True(chunks.Count > 0);
 - [ ] Proactive insight generation
 - [ ] Cross-reference intelligence
 
-## ?? Contributing
+## 🤝 Contributing
 
 ### Code Style
 - **Clean Architecture**: Maintain dependency direction
@@ -401,7 +426,7 @@ When adding new features, consider:
 - **Performance**: Profile impact on processing times
 - **Testing**: How will this be unit/integration tested?
 
-## ?? License
+## 📄 License
 
 [Your license here]
 

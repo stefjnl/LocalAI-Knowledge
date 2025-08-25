@@ -4,6 +4,7 @@
 @using LocalAI.Web.Models
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.Components
+@using System.IO
 @inject IApiService ApiService
 @inject IConversationService ConversationService
 @rendermode @(new InteractiveServerRenderMode())
@@ -259,9 +260,42 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Console.WriteLine("OnInitializedAsync called");
         await CheckCollectionStatus();
         conversationHistory = await ConversationService.GetConversationHistoryAsync();
+        Console.WriteLine($"Loaded {conversationHistory.Count} items from conversation history");
+        
+        // Create initial conversation
+        await CreateInitialConversation();
         await LoadConversations();
+        Console.WriteLine("OnInitializedAsync completed");
+    }
+
+    private async Task CreateInitialConversation()
+    {
+        try
+        {
+            Console.WriteLine("Creating initial conversation");
+            var response = await ApiService.CreateConversationAsync();
+            if (response.Success && response.Data != null)
+            {
+                currentConversation = response.Data;
+                Console.WriteLine($"Initial conversation created: {currentConversation.Id}");
+            }
+            else
+            {
+                Console.WriteLine($"Failed to create initial conversation: {response.Error}");
+                // Initialize with a null conversation if API fails
+                currentConversation = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating initial conversation: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            // Initialize with a null conversation if API fails
+            currentConversation = null;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -367,6 +401,15 @@
 
                 // Refresh conversation history
                 conversationHistory = await ConversationService.GetConversationHistoryAsync();
+                
+                // Save messages to current conversation if it exists
+                if (currentConversation != null)
+                {
+                    // Add user message
+                    await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", searchQuery.Trim());
+                    // Add assistant message
+                    await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", searchResponse.RAGResponse);
+                }
                 
                 // Clear searchResponse to avoid duplication
                 searchResponse = null;
@@ -488,18 +531,67 @@
     {
         try
         {
+            Console.WriteLine($"StartNewChat called. Current conversation: {currentConversation?.Id}, History count: {conversationHistory.Count}");
+            
+            // Add immediate feedback
+            StateHasChanged();
+
+            // If we have a current conversation and conversation history, save it
+            if (currentConversation != null && conversationHistory.Any())
+            {
+                Console.WriteLine($"Saving {conversationHistory.Count} messages to conversation {currentConversation.Id}");
+                
+                // Save all messages in the current conversation
+                foreach (var item in conversationHistory)
+                {
+                    Console.WriteLine($"Saving user message: {item.Query}");
+                    // Add user message
+                    var userResponse = await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", item.Query);
+                    if (!userResponse.Success)
+                    {
+                        Console.WriteLine($"Failed to save user message: {userResponse.Error}");
+                    }
+
+                    Console.WriteLine($"Saving assistant message: {item.Response}");
+                    // Add assistant message
+                    var assistantResponse = await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", item.Response);
+                    if (!assistantResponse.Success)
+                    {
+                        Console.WriteLine($"Failed to save assistant message: {assistantResponse.Error}");
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("No current conversation or history to save");
+            }
+
+            // Create a new conversation
+            Console.WriteLine("Creating new conversation");
             var response = await ApiService.CreateConversationAsync();
             if (response.Success && response.Data != null)
             {
+                Console.WriteLine($"New conversation created: {response.Data.Id}");
                 currentConversation = response.Data;
                 await ClearConversation(); // Clear local session storage
                 await LoadConversations(); // Refresh conversation list
+                StateHasChanged();
+            }
+            else
+            {
+                Console.WriteLine($"Failed to create new conversation: {response.Error}");
+                // Even if API fails, clear local conversation
+                await ClearConversation();
                 StateHasChanged();
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error creating new conversation: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            // Even if there's an error, clear local conversation
+            await ClearConversation();
+            StateHasChanged();
         }
     }
 
@@ -512,16 +604,27 @@
             {
                 currentConversation = response.Data;
                 
-                // Load messages into local session storage
-                var historyItems = response.Data.Messages.Select(m => new ConversationHistoryItem
+                // Convert API messages to conversation history items
+                var historyItems = new List<ConversationHistoryItem>();
+                for (int i = 0; i < response.Data.Messages.Count; i += 2)
                 {
-                    Query = m.Role == "user" ? m.Content : "",
-                    Response = m.Role == "assistant" ? m.Content : "",
-                    Timestamp = m.Timestamp
-                }).Where(item => !string.IsNullOrEmpty(item.Query) || !string.IsNullOrEmpty(item.Response)).ToList();
+                    // Group user and assistant messages together
+                    var userMessage = response.Data.Messages[i];
+                    var assistantMessage = i + 1 < response.Data.Messages.Count ? response.Data.Messages[i + 1] : null;
+                    
+                    if (userMessage.Role == "user")
+                    {
+                        historyItems.Add(new ConversationHistoryItem
+                        {
+                            Query = userMessage.Content,
+                            Response = assistantMessage?.Role == "assistant" ? assistantMessage.Content : "",
+                            Timestamp = userMessage.Timestamp
+                        });
+                    }
+                }
                 
-                // For now, we'll just clear and show a message that loading is not fully implemented
-                await ClearConversation();
+                // Update local conversation history
+                conversationHistory = historyItems;
                 StateHasChanged();
             }
         }

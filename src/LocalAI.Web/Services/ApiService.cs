@@ -19,6 +19,7 @@ public interface IApiService
     Task<ApiResponse<ChatConversation>> GetConversationAsync(Guid id);
     Task<ApiResponse<ChatConversation>> CreateConversationAsync(string title = "New Chat");
     Task<ApiResponse<bool>> DeleteConversationAsync(Guid id);
+    Task<ApiResponse<ConversationMessage>> AddMessageToConversationAsync(Guid conversationId, string role, string content);
 }
 
 public class ApiService : IApiService
@@ -302,6 +303,29 @@ public class ApiService : IApiService
         catch (Exception ex)
         {
             return new ApiResponse<bool> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<ConversationMessage>> AddMessageToConversationAsync(Guid conversationId, string role, string content)
+    {
+        try
+        {
+            var request = new { Role = role, Content = content };
+            var response = await _httpClient.PostAsJsonAsync($"/api/conversations/{conversationId}/messages", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var contentString = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ConversationMessage>(contentString, _jsonOptions);
+                return new ApiResponse<ConversationMessage> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<ConversationMessage> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ConversationMessage> { Success = false, Error = ex.Message };
         }
     }
 

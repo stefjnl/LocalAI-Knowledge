@@ -529,6 +529,19 @@ public class Program
             }
         });
 
+        app.MapPost("/api/conversations/{conversationId}/messages", async (Guid conversationId, AddMessageRequest request, IConversationService conversationService) =>
+        {
+            try
+            {
+                var message = await conversationService.AddMessageAsync(conversationId, request.Role, request.Content);
+                return Results.Created($"/api/conversations/{conversationId}/messages/{message.Id}", message);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error adding message to conversation: {ex.Message}");
+            }
+        });
+
         // Register enhanced search endpoints
         app.MapEnhancedSearchEndpoints();
 
@@ -559,3 +572,5 @@ public record TimingInfo
 public record ChatMessageRequest(string Content, MessageRole Role = MessageRole.User);
 
 public record CreateConversationRequest(string Title = "New Chat");
+
+public record AddMessageRequest(string Role, string Content);
