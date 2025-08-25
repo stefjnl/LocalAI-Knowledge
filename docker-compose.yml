@@ -29,6 +29,8 @@ services:
       - ApiSettings__BaseUrl=http://localai-api:8080
     depends_on:
       - localai-api
+    volumes:
+      - ./data-protection-keys:/app/data-protection-keys
     restart: unless-stopped
     networks:
       - localai-network

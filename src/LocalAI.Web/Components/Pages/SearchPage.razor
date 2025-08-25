@@ -7,7 +7,8 @@
 @using System.IO
 @inject IApiService ApiService
 @inject IConversationService ConversationService
-@rendermode @(new InteractiveServerRenderMode())
+@inject IConfiguration Configuration
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 <PageTitle>Knowledge Search</PageTitle>
 
@@ -208,6 +209,19 @@
             }
 
             <!-- Input Area -->
+            @if (useOpenRouter)
+            {
+                <div class="model-selector">
+                    <label>
+                        <input type="radio" name="model" value="local" checked="@(selectedModel == "local")" @onclick='() => SetModel("local")' />
+                        Local LLM
+                    </label>
+                    <label>
+                        <input type="radio" name="model" value="qwen3-coder" checked="@(selectedModel == "qwen3-coder")" @onclick='() => SetModel("qwen3-coder")' />
+                        Qwen3-Coder
+                    </label>
+                </div>
+            }
             <div class="chat-input-container">
                 <div class="input-area">
                     <div class="input-actions">
@@ -251,6 +265,8 @@
     private List<ConversationHistoryItem> conversationHistory = new List<ConversationHistoryItem>();
     private ElementReference chatContainer;
     private bool areSourcesVisible = false;
+    private string selectedModel = "local";
+    private bool useOpenRouter = false;
     
     // Chat management properties
     private List<LocalAI.Core.Models.ChatConversationSummary> conversations = new List<LocalAI.Core.Models.ChatConversationSummary>();
@@ -260,6 +276,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        useOpenRouter = Configuration.GetValue<bool>("OpenRouter:UseOpenRouter");
         Console.WriteLine("OnInitializedAsync called");
         await CheckCollectionStatus();
         conversationHistory = await ConversationService.GetConversationHistoryAsync();
@@ -370,53 +387,54 @@
 
         try
         {
-            // Get recent context for the conversation
             var context = await ConversationService.GetRecentContextAsync(3);
 
-            // Log context being sent
-            Console.WriteLine($"[DEBUG] SearchPage sending request: {searchQuery}");
-            if (context != null && context.Any())
+            if (selectedModel == "qwen3-coder" && useOpenRouter)
             {
-                Console.WriteLine($"[DEBUG] SearchPage sending conversation history: {context.Count} exchanges");
-                for (int i = 0; i < context.Count; i++)
+                var response = await ApiService.CodeSearchAsync(searchQuery.Trim(), context);
+                if (response.Success && response.Data != null)
                 {
-                    var exchange = context[i];
-                    Console.WriteLine($"[DEBUG] SearchPage Exchange {i + 1} - User: {exchange.Query}");
-                    Console.WriteLine($"[DEBUG] SearchPage Exchange {i + 1} - Assistant: {exchange.Response}");
+                    searchResponse = new LocalAI.Web.Services.SearchResponse
+                    {
+                        Query = searchQuery.Trim(),
+                        RAGResponse = response.Data.Response,
+                        HasResults = true
+                    };
+
+                    await ConversationService.AddToConversationHistoryAsync(searchQuery.Trim(), searchResponse.RAGResponse);
+                    conversationHistory = await ConversationService.GetConversationHistoryAsync();
+
+                    if (currentConversation != null)
+                    {
+                        await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", searchQuery.Trim());
+                        await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", searchResponse.RAGResponse);
+                    }
+                }
+                else
+                {
+                    searchError = response.Error ?? "Unknown error occurred";
                 }
             }
             else
             {
-                Console.WriteLine("[DEBUG] SearchPage sending no conversation history");
-            }
-
-            // Perform search with context
-            var response = await ApiService.SearchAsync(searchQuery.Trim(), 8, context);
-            if (response.Success && response.Data != null)
-            {
-                searchResponse = response.Data;
-
-                // Add to conversation history
-                await ConversationService.AddToConversationHistoryAsync(searchQuery.Trim(), searchResponse.RAGResponse);
-
-                // Refresh conversation history
-                conversationHistory = await ConversationService.GetConversationHistoryAsync();
-                
-                // Save messages to current conversation if it exists
-                if (currentConversation != null)
+                var response = await ApiService.SearchAsync(searchQuery.Trim(), 8, context);
+                if (response.Success && response.Data != null)
                 {
-                    // Add user message
-                    await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", searchQuery.Trim());
-                    // Add assistant message
-                    await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", searchResponse.RAGResponse);
+                    searchResponse = response.Data;
+
+                    await ConversationService.AddToConversationHistoryAsync(searchQuery.Trim(), searchResponse.RAGResponse);
+                    conversationHistory = await ConversationService.GetConversationHistoryAsync();
+
+                    if (currentConversation != null)
+                    {
+                        await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", searchQuery.Trim());
+                        await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", searchResponse.RAGResponse);
+                    }
                 }
-                
-                // Clear searchResponse to avoid duplication
-                searchResponse = null;
-            }
-            else
-            {
-                searchError = response.Error ?? "Unknown error occurred";
+                else
+                {
+                    searchError = response.Error ?? "Unknown error occurred";
+                }
             }
         }
         catch (Exception ex)
@@ -426,6 +444,7 @@
         finally
         {
             isSearching = false;
+            searchQuery = string.Empty;
             StateHasChanged();
         }
     }
@@ -500,6 +519,11 @@
     private void ToggleSourcesVisibility()
     {
         areSourcesVisible = !areSourcesVisible;
+    }
+
+    private void SetModel(string model)
+    {
+        selectedModel = model;
     }
 
     // Chat management methods

@@ -29,15 +29,11 @@ RUN dotnet publish "LocalAI.Api/LocalAI.Api.csproj" -c Release -o /app/publish
 FROM base AS final
 WORKDIR /app
 
+# Create directories
+RUN mkdir -p ./data/transcripts ./data/pdfs
+
 # Copy published application
 COPY --from=publish /app/publish .
-
-# Copy data directory (your knowledge base files)
-COPY data/ ./data/
-
-# Copy root-level configuration files
-COPY appsettings.json ./
-COPY .env* ./
 
 # Handle shutdown signals properly
 STOPSIGNAL SIGTERM
