@@ -42,9 +42,28 @@
                         @foreach (var conv in conversations)
                         {
                             <div class="conversation-item @(currentConversation?.Id == conv.Id ? "active" : "")" 
-                                 @onclick="() => LoadConversation(conv.Id)">
-                                <div class="conversation-title">@GetConversationTitle(conv)</div>
+                                 @onclick="() => LoadConversation(conv.Id)"
+                                 @onmouseover="() => ShowPreview(conv.Id)"
+                                 @onmouseout="() => HidePreview()">
+                                <div class="conversation-header">
+                                    @if (editingConversationId == conv.Id)
+                                    {
+                                        <input type="text" class="conversation-title-edit" @bind="editTitle" @onkeydown="@(e => HandleTitleEditKeydown(e, conv.Id))" @ref="titleEditInput" />
+                                        <button class="save-title-btn" @onclick="() => SaveTitle(conv.Id)">✓</button>
+                                        <button class="cancel-title-btn" @onclick="CancelEditTitle">✗</button>
+                                    }
+                                    else
+                                    {
+                                        <div class="conversation-title">@GetConversationTitle(conv)</div>
+                                        <button class="edit-title-btn" @onclick="() => StartEditTitle(conv.Id, conv.Title)">✏️</button>
+                                        <button class="delete-conversation-btn" @onclick="() => DeleteConversation(conv.Id)">🗑️</button>
+                                    }
+                                </div>
                                 <div class="conversation-date">@conv.UpdatedAt.ToString("MMM d, h:mm tt")</div>
+                                @if (previewedConversationId == conv.Id && conversationPreviews.ContainsKey(conv.Id))
+                                {
+                                    <div class="conversation-preview">@conversationPreviews[conv.Id]</div>
+                                }
                             </div>
                         }
                     }
@@ -76,11 +95,15 @@
                                 <h2>Welcome to Your Knowledge Assistant</h2>
                                 <p>Ask anything about your documents and I'll search through your knowledge base to find answers.
                                 </p>
-                                <div class="welcome-examples">
-                                    <div class="example-item">"Tell me about Azure pricing models"</div>
-                                    <div class="example-item">"What are the key features of .NET 9?"</div>
-                                    <div class="example-item">"Summarize the main points from the LLM research papers"</div>
-                                </div>
+                                <button class="toggle-examples-btn" @onclick="ToggleExamples">@showExamplesButtonText</button>
+                                @if (showExamples)
+                                {
+                                    <div class="welcome-examples">
+                                        <div class="example-item">"Tell me about Azure pricing models"</div>
+                                        <div class="example-item">"What are the key features of .NET 9?"</div>
+                                        <div class="example-item">"Summarize the main points from the LLM research papers"</div>
+                                    </div>
+                                }
                             </div>
                         </div>
                     }
@@ -273,6 +296,16 @@
     private LocalAI.Core.Models.ChatConversation? currentConversation;
     private bool isSidebarOpen = true;
     private bool conversationsLoading = false;
+    
+    // Conversation management properties
+    private Guid editingConversationId = Guid.Empty;
+    private string editTitle = "";
+    private ElementReference titleEditInput;
+    private Guid previewedConversationId = Guid.Empty;
+    private Dictionary<Guid, string> conversationPreviews = new Dictionary<Guid, string>();
+    private bool showExamples = true;
+
+    private string showExamplesButtonText => showExamples ? "Hide Examples" : "Show Examples";
 
     protected override async Task OnInitializedAsync()
     {
@@ -408,6 +441,23 @@
                     {
                         await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", searchQuery.Trim());
                         await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", searchResponse.RAGResponse);
+                        
+                        // Auto-generate title from first query if it's still "New Chat"
+                        if (currentConversation.Title == "New Chat" && conversations != null)
+                        {
+                            var conversation = conversations.FirstOrDefault(c => c.Id == currentConversation.Id);
+                            if (conversation != null)
+                            {
+                                // Generate a title from the first few words of the query
+                                var title = searchQuery.Trim();
+                                if (title.Length > 30)
+                                {
+                                    title = title.Substring(0, 30) + "...";
+                                }
+                                conversation.Title = title;
+                                currentConversation.Title = title;
+                            }
+                        }
                     }
                 }
                 else
@@ -429,6 +479,23 @@
                     {
                         await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", searchQuery.Trim());
                         await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", searchResponse.RAGResponse);
+                        
+                        // Auto-generate title from first query if it's still "New Chat"
+                        if (currentConversation.Title == "New Chat" && conversations != null)
+                        {
+                            var conversation = conversations.FirstOrDefault(c => c.Id == currentConversation.Id);
+                            if (conversation != null)
+                            {
+                                // Generate a title from the first few words of the query
+                                var title = searchQuery.Trim();
+                                if (title.Length > 30)
+                                {
+                                    title = title.Substring(0, 30) + "...";
+                                }
+                                conversation.Title = title;
+                                currentConversation.Title = title;
+                            }
+                        }
                     }
                 }
                 else
@@ -646,5 +713,126 @@
             
         // Generate title from first message if available
         return "New Chat";
+    }
+
+    // New conversation management methods
+    private async Task StartEditTitle(Guid conversationId, string currentTitle)
+    {
+        editingConversationId = conversationId;
+        editTitle = currentTitle;
+        StateHasChanged();
+        
+        // Focus the input after render
+        await InvokeAsync(async () =>
+        {
+            await Task.Delay(10);
+            await titleEditInput.FocusAsync();
+        });
+    }
+
+    private async Task SaveTitle(Guid conversationId)
+    {
+        if (!string.IsNullOrWhiteSpace(editTitle))
+        {
+            try
+            {
+                // Note: This would require a new API endpoint to update conversation titles
+                // For now, we'll just update the local list
+                var conversation = conversations.FirstOrDefault(c => c.Id == conversationId);
+                if (conversation != null)
+                {
+                    conversation.Title = editTitle;
+                }
+                
+                // If this is the current conversation, update it too
+                if (currentConversation?.Id == conversationId)
+                {
+                    currentConversation.Title = editTitle;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving title: {ex.Message}");
+            }
+        }
+        
+        editingConversationId = Guid.Empty;
+        StateHasChanged();
+    }
+
+    private void CancelEditTitle()
+    {
+        editingConversationId = Guid.Empty;
+        StateHasChanged();
+    }
+
+    private async Task HandleTitleEditKeydown(KeyboardEventArgs e, Guid conversationId)
+    {
+        if (e.Key == "Enter")
+        {
+            await SaveTitle(conversationId);
+        }
+        else if (e.Key == "Escape")
+        {
+            CancelEditTitle();
+        }
+    }
+
+    private async Task DeleteConversation(Guid conversationId)
+    {
+        try
+        {
+            // Show confirmation dialog
+            // Note: In a real implementation, you would use a proper modal dialog
+            var confirm = true; // For now, we'll assume confirmation
+            
+            if (confirm)
+            {
+                var response = await ApiService.DeleteConversationAsync(conversationId);
+                if (response.Success)
+                {
+                    // If we're deleting the current conversation, start a new one
+                    if (currentConversation?.Id == conversationId)
+                    {
+                        await StartNewChat();
+                    }
+                    
+                    // Refresh the conversations list
+                    await LoadConversations();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting conversation: {ex.Message}");
+        }
+    }
+
+    private async Task ShowPreview(Guid conversationId)
+    {
+        // Only show preview if we're not editing a title
+        if (editingConversationId == Guid.Empty)
+        {
+            previewedConversationId = conversationId;
+            
+            // Generate a preview from the conversation
+            // In a real implementation, this would come from the API
+            var preview = "Preview of conversation...";
+            conversationPreviews[conversationId] = preview;
+            
+            StateHasChanged();
+        }
+    }
+
+    private void HidePreview()
+    {
+        previewedConversationId = Guid.Empty;
+        StateHasChanged();
+    }
+
+    private void ToggleExamples()
+    {
+        showExamples = !showExamples;
+        StateHasChanged();
     }
 }
