@@ -19,6 +19,11 @@ public class Program
         if (File.Exists(envPath))
         {
             Env.Load(envPath);
+            Console.WriteLine($"[INFO] Loaded environment variables from: {envPath}");
+        }
+        else
+        {
+            Console.WriteLine($"[WARN] .env file not found at: {envPath}");
         }
 
         // Add configuration from both local and root
@@ -27,6 +32,17 @@ public class Program
             .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
             .AddJsonFile(Path.Combine(rootPath, "appsettings.json"), optional: true, reloadOnChange: true)
             .AddEnvironmentVariables();
+            
+        // Debug: Print out the OpenRouter API key (masked) to verify it's loaded
+        var openRouterKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? "NOT SET";
+        if (openRouterKey != "NOT SET" && openRouterKey.Length > 10)
+        {
+            Console.WriteLine($"[INFO] OpenRouter API Key loaded: {openRouterKey.Substring(0, 5)}...{openRouterKey.Substring(openRouterKey.Length - 5)}");
+        }
+        else
+        {
+            Console.WriteLine($"[WARN] OpenRouter API Key: {openRouterKey}");
+        }
 
         // Add services to the container
         builder.Services.AddEndpointsApiExplorer();
@@ -52,6 +68,17 @@ public class Program
         builder.Services.AddScoped<IRAGService, RAGService>();
         builder.Services.AddScoped<IDisplayService, DisplayService>();
         builder.Services.AddScoped<LocalAI.Core.Interfaces.IConversationService, LocalAI.Infrastructure.Services.FileBasedConversationService>();
+
+        // Register the Code Assistant Service
+        // If OpenRouter is configured, use Qwen3CoderService, otherwise use NullCodeAssistantService as fallback
+        if (builder.Configuration.GetValue<bool>("OpenRouter:UseOpenRouter"))
+        {
+            builder.Services.AddScoped<ICodeAssistantService, Qwen3CoderService>();
+        }
+        else
+        {
+            builder.Services.AddScoped<ICodeAssistantService, NullCodeAssistantService>();
+        }
 
         // CORS for Blazor app (if running separately)
         builder.Services.AddCors(options =>
@@ -545,6 +572,29 @@ public class Program
         // Register enhanced search endpoints
         app.MapEnhancedSearchEndpoints();
 
+        // Conditionally map the code assistant endpoint
+        if (app.Configuration.GetValue<bool>("OpenRouter:UseOpenRouter"))
+        {
+            app.MapPost("/api/code", async (CodeRequest request, ICodeAssistantService codeAssistant, ILogger<Program> logger) =>
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(request.Query))
+                    {
+                        return Results.BadRequest("Query cannot be empty");
+                    }
+
+                    var response = await codeAssistant.GenerateCodeResponseAsync(request.Query, request.Context ?? new List<ConversationExchange>());
+
+                    return Results.Ok(new { Response = response });
+                }
+                catch (Exception ex)
+                {
+                    return Results.Problem($"Error generating code response: {ex.Message}");
+                }
+            });
+        }
+
         await app.RunAsync();
     }
 }
@@ -574,3 +624,5 @@ public record ChatMessageRequest(string Content, MessageRole Role = MessageRole.
 public record CreateConversationRequest(string Title = "New Chat");
 
 public record AddMessageRequest(string Role, string Content);
+
+public record CodeRequest(string Query, List<LocalAI.Core.Models.ConversationExchange>? Context = null);

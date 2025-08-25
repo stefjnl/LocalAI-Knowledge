@@ -28,8 +28,14 @@ RUN dotnet publish "LocalAI.Web/LocalAI.Web.csproj" -c Release -o /app/publish
 FROM base AS final
 WORKDIR /app
 
+# Create directory for data protection keys
+RUN mkdir -p /app/data-protection-keys
+
 # Copy published application
 COPY --from=publish /app/publish .
+
+# Copy environment file
+COPY .env* ./
 
 # Handle shutdown signals properly
 STOPSIGNAL SIGTERM

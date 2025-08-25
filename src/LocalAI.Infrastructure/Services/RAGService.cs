@@ -96,6 +96,9 @@ namespace LocalAI.Infrastructure.Services
             // Log the final prompt being sent to the LLM
             _logger.LogInformation("[DEBUG] Final LLM Prompt: {Prompt}", userPrompt);
 
+            // Determine if we're using OpenRouter
+            var isOpenRouter = _baseUrl.Contains("openrouter.ai");
+
             var payload = JsonSerializer.Serialize(new
             {
                 model = _model,
@@ -109,14 +112,52 @@ namespace LocalAI.Infrastructure.Services
                 max_tokens = 1500,        // Increased for comprehensive responses
                 top_p = 0.9,
                 frequency_penalty = 0.1,
-                presence_penalty = 0.1
+                presence_penalty = 0.1,
+                // Add OpenRouter specific parameters
+                provider = new
+                {
+                    order = new[] { "OpenRouter", "Azure", "LocalAI" }
+                }
             });
 
             var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
 
             try
             {
-                var response = await _httpClient.PostAsync($"{_baseUrl}/v1/chat/completions", content);
+                // Add OpenRouter specific headers if needed
+                if (isOpenRouter)
+                {
+                    // Remove any existing auth header first
+                    _httpClient.DefaultRequestHeaders.Authorization = null;
+                    _httpClient.DefaultRequestHeaders.Remove("Authorization");
+                    _httpClient.DefaultRequestHeaders.Remove("HTTP-Referer");
+                    _httpClient.DefaultRequestHeaders.Remove("X-Title");
+                    
+                    // Get API key from environment or config
+                    var apiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? 
+                                System.Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ??
+                                "YOUR_API_KEY_HERE"; // This will help us debug if the key isn't set
+                    
+                    _logger.LogInformation("[DEBUG] Using API Key: {ApiKey}", apiKey.Length > 10 ? apiKey.Substring(0, 5) + "..." + apiKey.Substring(apiKey.Length - 5) : "INVALID");
+                    
+                    if (!string.IsNullOrEmpty(apiKey) && apiKey != "YOUR_API_KEY_HERE")
+                    {
+                        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+                        _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", "http://localhost:7001");
+                        _httpClient.DefaultRequestHeaders.Add("X-Title", "LocalAI Knowledge Assistant");
+                    }
+                    else
+                    {
+                        _logger.LogError("[ERROR] OpenRouter API key not found in environment variables or configuration");
+                        return "❌ Error: OpenRouter API key not configured. Please check your .env file.";
+                    }
+                }
+
+                // Determine endpoint based on whether we're using OpenRouter
+                var endpoint = isOpenRouter ? $"{_baseUrl}/chat/completions" : $"{_baseUrl}/v1/chat/completions";
+                _logger.LogInformation("[DEBUG] Sending request to endpoint: {Endpoint}", endpoint);
+                
+                var response = await _httpClient.PostAsync(endpoint, content);
                 if (response.IsSuccessStatusCode)
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
@@ -126,11 +167,13 @@ namespace LocalAI.Infrastructure.Services
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("[ERROR] LLM API error: {ErrorContent}", errorContent);
                     return $"❌ LLM API error: {errorContent}";
                 }
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "[ERROR] Error connecting to LLM");
                 return $"❌ Error connecting to LLM: {ex.Message}";
             }
         }

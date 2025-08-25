@@ -32,11 +32,7 @@ WORKDIR /app
 # Copy published application
 COPY --from=publish /app/publish .
 
-# Copy data directory (your knowledge base files)
-COPY data/ ./data/
-
-# Copy root-level configuration files
-COPY appsettings.json ./
+# Copy environment file
 COPY .env* ./
 
 # Handle shutdown signals properly

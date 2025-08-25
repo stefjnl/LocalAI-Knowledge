@@ -20,6 +20,7 @@ public interface IApiService
     Task<ApiResponse<ChatConversation>> CreateConversationAsync(string title = "New Chat");
     Task<ApiResponse<bool>> DeleteConversationAsync(Guid id);
     Task<ApiResponse<ConversationMessage>> AddMessageToConversationAsync(Guid conversationId, string role, string content);
+    Task<ApiResponse<CodeResponse>> CodeSearchAsync(string query, List<ConversationExchange>? context = null);
 }
 
 public class ApiService : IApiService
@@ -329,6 +330,29 @@ public class ApiService : IApiService
         }
     }
 
+    public async Task<ApiResponse<CodeResponse>> CodeSearchAsync(string query, List<ConversationExchange>? context = null)
+    {
+        try
+        {
+            var request = new CodeRequest(query, context);
+            var response = await _httpClient.PostAsJsonAsync("/api/code", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<CodeResponse>(content, _jsonOptions);
+                return new ApiResponse<CodeResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<CodeResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<CodeResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
     private string GetContentType(string fileName)
     {
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
@@ -343,6 +367,8 @@ public class ApiService : IApiService
 
 // DTOs matching the actual API responses
 public record SearchRequest(string Query, int? Limit = 8, List<LocalAI.Core.Models.ConversationExchange>? Context = null);
+public record CodeRequest(string Query, List<LocalAI.Core.Models.ConversationExchange>? Context = null);
+public record CodeResponse(string Response);
 
 public record TimingInfo
 {

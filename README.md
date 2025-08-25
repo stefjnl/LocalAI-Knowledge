@@ -100,9 +100,11 @@ graph TD
 
 1. **.NET 8/9 SDK** installed
 2. **Docker** for running Qdrant
-3. **LM Studio** with models loaded:
-   - `text-embedding-nomic-embed-text-v2-moe` (embeddings)
-   - `qwen2.5-coder-7b-instruct` (chat completions)
+3. **OpenRouter API Key** (required for default configuration):
+   - Sign up at [OpenRouter.ai](https://openrouter.ai/)
+   - Copy `.env.example` to `.env` and add your API key
+4. **LM Studio** with embedding model loaded (optional, for local embeddings):
+   - `text-embedding-nomic-embed-text-v2-moe`
 
 ### Setup Steps
 
@@ -113,17 +115,23 @@ graph TD
    dotnet build
    ```
 
-2. **Start Qdrant**:
+2. **Configure API keys**:
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your OpenRouter API key
+   ```
+
+3. **Start Qdrant**:
    ```bash
    docker-compose up -d
    ```
 
-3. **Configure LM Studio**:
+4. **Configure LM Studio** (optional, for local embeddings):
    - Start LM Studio server on `localhost:1234`
    - Load embedding model: `text-embedding-nomic-embed-text-v2-moe`
-   - Load chat model: `qwen2.5-coder-7b-instruct`
+   - Update `appsettings.json` to use local embedding service if preferred
 
-4. **Add documents**:
+5. **Add documents**:
    ```
    data/
    ├── transcripts/     # .txt files
@@ -131,7 +139,7 @@ graph TD
        ├── llms/       # LLM-related PDFs
    ```
 
-5. **Run**:
+6. **Run**:
    ```bash
    cd src/LocalAI.Console
    dotnet run
@@ -146,15 +154,24 @@ The application includes Docker support for easy deployment:
    docker-compose -f docker-compose.infrastructure.yml up -d
    ```
 
-2. **Start application services**:
+2. **Configure environment variables**:
+   Make sure your `.env` file is properly configured with your OpenRouter API key:
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your OpenRouter API key
+   ```
+
+3. **Start application services**:
    ```bash
    docker-compose up -d
    ```
 
-3. **Access services**:
+4. **Access services**:
    - Web UI: http://localhost:7001
    - API: http://localhost:7190
    - Qdrant: http://localhost:6333
+
+**Note**: The default configuration uses OpenRouter for the RAG service. Make sure to set your OpenRouter API key in the environment variables. The docker-compose.yml file is configured to pass through environment variables from your host system to the containers.
 
 ## 🔧 Understanding the Code
 
@@ -215,7 +232,7 @@ var response = await ragService.GenerateResponseAsync(query, context);
 // Uses chat completion API for synthesized responses
 ```
 
-## ⚙️ Configuration
+## 🔧 Configuration
 
 ### appsettings.json Structure
 ```json
@@ -225,8 +242,8 @@ var response = await ragService.GenerateResponseAsync(query, context);
     "Model": "text-embedding-nomic-embed-text-v2-moe"
   },
   "RAGService": {
-    "BaseUrl": "http://localhost:1234", 
-    "Model": "qwen2.5-coder-7b-instruct"
+    "BaseUrl": "https://openrouter.ai/api/v1", 
+    "Model": "openrouter/qwen/qwen-3"
   },
   "Qdrant": {
     "BaseUrl": "http://localhost:6333",
@@ -235,6 +252,12 @@ var response = await ragService.GenerateResponseAsync(query, context);
   "DocumentPaths": {
     "Transcripts": "data/transcripts/",
     "PDFs": "data/pdfs/"
+  },
+  "OpenRouter": {
+    "UseOpenRouter": true,
+    "ApiKey": "YOUR_API_KEY_HERE",
+    "Model": "openrouter/qwen/qwen-3",
+    "Endpoint": "https://openrouter.ai/api/v1/chat/completions"
   }
 }
 ```
@@ -244,6 +267,51 @@ var response = await ragService.GenerateResponseAsync(query, context);
 - **Models**: Easily swap models by changing the model name
 - **Paths**: Configurable document source directories
 - **Collection**: Qdrant collection name for vector storage
+- **OpenRouter**: Configuration for enhanced code assistant features (requires API key)
+
+### Environment Variables
+
+For security, API keys and sensitive configuration should be stored in environment variables rather than in appsettings.json. 
+
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and add your actual API keys:
+   ```bash
+   OPENROUTER_API_KEY=your_actual_openrouter_api_key_here
+   ```
+
+3. The application will automatically load these environment variables at startup.
+
+**Note**: The `.env` file is included in `.gitignore` and will not be committed to version control.
+
+### Local Model Configuration
+
+If you prefer to use local models instead of OpenRouter:
+
+1. Start LM Studio with the required models:
+   - Embedding model: `text-embedding-nomic-embed-text-v2-moe`
+   - Chat model: `qwen2.5-coder-7b-instruct` (or similar)
+
+2. Update `appsettings.json`:
+   ```json
+   {
+     "RAGService": {
+       "BaseUrl": "http://localhost:1234",
+       "Model": "qwen2.5-coder-7b-instruct"
+     },
+     "OpenRouter": {
+       "UseOpenRouter": false
+     }
+   }
+   ```
+
+3. Update `.env`:
+   ```bash
+   OPENROUTER_USE_OPENROUTER=false
+   ```
 
 ## 🛠️ Development Workflow
 
