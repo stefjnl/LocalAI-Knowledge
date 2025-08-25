@@ -51,6 +51,7 @@ public class Program
         builder.Services.AddScoped<IDocumentProcessor, DocumentProcessor>();
         builder.Services.AddScoped<IRAGService, RAGService>();
         builder.Services.AddScoped<IDisplayService, DisplayService>();
+        builder.Services.AddScoped<LocalAI.Core.Interfaces.IConversationService, LocalAI.Infrastructure.Services.FileBasedConversationService>();
 
         // CORS for Blazor app (if running separately)
         builder.Services.AddCors(options =>
@@ -467,6 +468,80 @@ public class Program
             }
         });
 
+        // Chat Conversation API Endpoints
+        app.MapGet("/api/conversations", async (IConversationService conversationService) =>
+        {
+            try
+            {
+                var conversations = await conversationService.GetAllConversationsAsync();
+                return Results.Ok(conversations);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error retrieving conversations: {ex.Message}");
+            }
+        });
+
+        app.MapGet("/api/conversations/{conversationId}", async (Guid conversationId, IConversationService conversationService) =>
+        {
+            try
+            {
+                var conversation = await conversationService.GetConversationAsync(conversationId);
+                if (conversation == null)
+                {
+                    return Results.NotFound();
+                }
+                return Results.Ok(conversation);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error retrieving conversation: {ex.Message}");
+            }
+        });
+
+        app.MapPost("/api/conversations", async (CreateConversationRequest request, IConversationService conversationService) =>
+        {
+            try
+            {
+                var conversation = await conversationService.CreateConversationAsync(request.Title);
+                return Results.Created($"/api/conversations/{conversation.Id}", conversation);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error creating conversation: {ex.Message}");
+            }
+        });
+
+        app.MapDelete("/api/conversations/{conversationId}", async (Guid conversationId, IConversationService conversationService) =>
+        {
+            try
+            {
+                var result = await conversationService.DeleteConversationAsync(conversationId);
+                if (!result)
+                {
+                    return Results.NotFound();
+                }
+                return Results.NoContent();
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error deleting conversation: {ex.Message}");
+            }
+        });
+
+        app.MapPost("/api/conversations/{conversationId}/messages", async (Guid conversationId, AddMessageRequest request, IConversationService conversationService) =>
+        {
+            try
+            {
+                var message = await conversationService.AddMessageAsync(conversationId, request.Role, request.Content);
+                return Results.Created($"/api/conversations/{conversationId}/messages/{message.Id}", message);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error adding message to conversation: {ex.Message}");
+            }
+        });
+
         // Register enhanced search endpoints
         app.MapEnhancedSearchEndpoints();
 
@@ -495,3 +570,7 @@ public record TimingInfo
 }
 
 public record ChatMessageRequest(string Content, MessageRole Role = MessageRole.User);
+
+public record CreateConversationRequest(string Title = "New Chat");
+
+public record AddMessageRequest(string Role, string Content);

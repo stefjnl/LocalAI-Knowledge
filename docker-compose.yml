@@ -13,7 +13,7 @@ services:
       - LMStudioSettings__Endpoint=http://host.docker.internal:1234
     volumes:
       - ./appsettings.json:/app/appsettings.json:ro
-      - ./data:/app/data:ro
+      - ./data:/app/data # Changed: Allow write access for saving conversations
     restart: unless-stopped
     networks:
       - localai-network

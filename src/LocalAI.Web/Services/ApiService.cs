@@ -13,6 +13,13 @@ public interface IApiService
     Task<ApiResponse<ProcessedDocumentsResponse>> GetProcessedDocumentsAsync();
     Task<ApiResponse<LastRunResponse>> GetLastRunAsync();
     Task<ApiResponse<ProcessingSummaryResponse>> GetProcessingSummaryAsync();
+    
+    // Conversation API methods
+    Task<ApiResponse<List<ChatConversationSummary>>> GetConversationsAsync();
+    Task<ApiResponse<ChatConversation>> GetConversationAsync(Guid id);
+    Task<ApiResponse<ChatConversation>> CreateConversationAsync(string title = "New Chat");
+    Task<ApiResponse<bool>> DeleteConversationAsync(Guid id);
+    Task<ApiResponse<ConversationMessage>> AddMessageToConversationAsync(Guid conversationId, string role, string content);
 }
 
 public class ApiService : IApiService
@@ -208,6 +215,117 @@ public class ApiService : IApiService
         catch (Exception ex)
         {
             return new ApiResponse<ProcessingSummaryResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
+    // Conversation API methods
+    public async Task<ApiResponse<List<ChatConversationSummary>>> GetConversationsAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("/api/conversations");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<List<ChatConversationSummary>>(content, _jsonOptions);
+                return new ApiResponse<List<ChatConversationSummary>> { Success = true, Data = result ?? new List<ChatConversationSummary>() };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<List<ChatConversationSummary>> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<List<ChatConversationSummary>> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<ChatConversation>> GetConversationAsync(Guid id)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"/api/conversations/{id}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ChatConversation>(content, _jsonOptions);
+                return new ApiResponse<ChatConversation> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<ChatConversation> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ChatConversation> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<ChatConversation>> CreateConversationAsync(string title = "New Chat")
+    {
+        try
+        {
+            var request = new { Title = title };
+            var response = await _httpClient.PostAsJsonAsync("/api/conversations", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ChatConversation>(content, _jsonOptions);
+                return new ApiResponse<ChatConversation> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<ChatConversation> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ChatConversation> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> DeleteConversationAsync(Guid id)
+    {
+        try
+        {
+            var response = await _httpClient.DeleteAsync($"/api/conversations/{id}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                return new ApiResponse<bool> { Success = true, Data = true };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<bool> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<ConversationMessage>> AddMessageToConversationAsync(Guid conversationId, string role, string content)
+    {
+        try
+        {
+            var request = new { Role = role, Content = content };
+            var response = await _httpClient.PostAsJsonAsync($"/api/conversations/{conversationId}/messages", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var contentString = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ConversationMessage>(contentString, _jsonOptions);
+                return new ApiResponse<ConversationMessage> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<ConversationMessage> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ConversationMessage> { Success = false, Error = ex.Message };
         }
     }
 

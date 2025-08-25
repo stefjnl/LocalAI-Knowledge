@@ -1,8 +1,10 @@
 ﻿@page "/search"
 @using LocalAI.Web.Services
 @using LocalAI.Core.Models
+@using LocalAI.Web.Models
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.Components
+@using System.IO
 @inject IApiService ApiService
 @inject IConversationService ConversationService
 @rendermode @(new InteractiveServerRenderMode())
@@ -18,703 +20,223 @@
         </div>
     </header>
 
-    <!-- Main Chat Area -->
-    <div class="chat-main" @ref="chatContainer">
-        @if (searchError != "")
-        {
-            <div class="error-banner">
-                <span class="error-icon">⚠️</span>
-                <span class="error-text">@searchError</span>
+    <div class="chat-layout">
+        <!-- Chat History Sidebar -->
+        <div class="sidebar @(isSidebarOpen ? "open" : "")">
+            <div class="sidebar-header">
+                <h2>Conversations</h2>
+                <button class="close-sidebar-btn" @onclick="ToggleSidebar">✕</button>
             </div>
-        }
-
-        <!-- Conversation History -->
-        <div class="messages-container">
-            @if (!conversationHistory.Any() && searchResponse == null)
-            {
-                <div class="welcome-message">
-                    <div class="welcome-content">
-                        <div class="welcome-icon">🧠</div>
-                        <h2>Welcome to Your Knowledge Assistant</h2>
-                        <p>Ask anything about your documents and I'll search through your knowledge base to find answers.
-                        </p>
-                        <div class="welcome-examples">
-                            <div class="example-item">"Tell me about Azure pricing models"</div>
-                            <div class="example-item">"What are the key features of .NET 9?"</div>
-                            <div class="example-item">"Summarize the main points from the LLM research papers"</div>
-                        </div>
-                    </div>
-                </div>
-            }
-            else
-            {
-                @foreach (var item in conversationHistory)
-                {
-                    <div class="message user-message">
-                        <div class="message-avatar user-avatar">
-                            <span>👤</span>
-                        </div>
-                        <div class="message-content">
-                            <div class="message-text">@item.Query</div>
-                            <div class="message-timestamp">@item.Timestamp.ToString("MMM d, h:mm tt")</div>
-                        </div>
-                    </div>
-                    <div class="message assistant-message">
-                        <div class="message-avatar assistant-avatar">
-                            <span>🤖</span>
-                        </div>
-                        <div class="message-content">
-                            <div class="message-text">@((MarkupString)FormatResponse(item.Response))</div>
-                            @if (HasSources(item.Response))
-                            {
-                                <div class="sources-indicator">Sources cited below</div>
-                            }
-                        </div>
-                    </div>
-                }
-
-                @if (searchResponse != null)
-                {
-                    <div class="message user-message">
-                        <div class="message-avatar user-avatar">
-                            <span>👤</span>
-                        </div>
-                        <div class="message-content">
-                            <div class="message-text">@searchResponse.Query</div>
-                        </div>
-                    </div>
-                    <div class="message assistant-message">
-                        <div class="message-avatar assistant-avatar">
-                            <span>🤖</span>
-                        </div>
-                        <div class="message-content">
-                            @if (!string.IsNullOrEmpty(searchResponse.RAGResponse))
-                            {
-                                <div class="message-text">@((MarkupString)FormatResponse(searchResponse.RAGResponse))</div>
-                                @if (searchResponse.Timing != null &&
-                                                    !string.IsNullOrEmpty(searchResponse.Timing.FormattedResponseTime))
-                                {
-                                    <div class="response-time">Responded in @searchResponse.Timing.FormattedResponseTime</div>
-                                }
-                                @if (HasSources(searchResponse.RAGResponse))
-                                {
-                                    <div class="sources-indicator">Sources cited below</div>
-                                }
-                            }
-                            else
-                            {
-                                <div class="message-text no-response">No response generated.</div>
-                            }
-                        </div>
-                    </div>
-                }
-            }
-        </div>
-    </div>
-
-    <!-- Sources Section (only show when there's a response) -->
-    @if (searchResponse != null && searchResponse.Sources?.Any() == true)
-    {
-        <div class="sources-section">
-            <div class="sources-header">
-                <h3>Sources (@searchResponse.Sources.Count)</h3>
-                <button class="toggle-sources-btn" @onclick="ToggleSourcesVisibility">
-                    @if (areSourcesVisible)
+            <div class="sidebar-content">
+                <button class="new-chat-btn" @onclick="() => StartNewChat()">
+                    <span>+</span> New Chat
+                </button>
+                <div class="conversations-list">
+                    @if (conversationsLoading)
                     {
-                        <span>Hide Sources</span>
+                        <div class="loading">Loading conversations...</div>
                     }
                     else
                     {
-                        <span>Show Sources</span>
+                        @foreach (var conv in conversations)
+                        {
+                            <div class="conversation-item @(currentConversation?.Id == conv.Id ? "active" : "")" 
+                                 @onclick="() => LoadConversation(conv.Id)">
+                                <div class="conversation-title">@GetConversationTitle(conv)</div>
+                                <div class="conversation-date">@conv.UpdatedAt.ToString("MMM d, h:mm tt")</div>
+                            </div>
+                        }
                     }
-                </button>
+                </div>
             </div>
-            @if (areSourcesVisible)
-            {
-                <div class="sources-grid">
-                    @foreach (var source in searchResponse.Sources)
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="main-content">
+            <!-- Sidebar Toggle Button (Mobile) -->
+            <button class="sidebar-toggle" @onclick="ToggleSidebar">☰</button>
+
+            <div class="chat-main" @ref="chatContainer">
+                @if (searchError != "")
+                {
+                    <div class="error-banner">
+                        <span class="error-icon">⚠️</span>
+                        <span class="error-text">@searchError</span>
+                    </div>
+                }
+
+                <!-- Conversation History -->
+                <div class="messages-container">
+                    @if (!conversationHistory.Any() && searchResponse == null)
                     {
-                        <div class="source-card">
-                            <div class="source-header">
-                                <h4 class="source-title">📄 @GetSourceName(source.Source)</h4>
-                                <span class="source-score">@(((int)(source.Score * 100)).ToString())%</span>
+                        <div class="welcome-message">
+                            <div class="welcome-content">
+                                <div class="welcome-icon">🧠</div>
+                                <h2>Welcome to Your Knowledge Assistant</h2>
+                                <p>Ask anything about your documents and I'll search through your knowledge base to find answers.
+                                </p>
+                                <div class="welcome-examples">
+                                    <div class="example-item">"Tell me about Azure pricing models"</div>
+                                    <div class="example-item">"What are the key features of .NET 9?"</div>
+                                    <div class="example-item">"Summarize the main points from the LLM research papers"</div>
+                                </div>
                             </div>
-                            @if (!string.IsNullOrEmpty(source.PageInfo))
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var item in conversationHistory)
+                        {
+                            <div class="message user-message">
+                                <div class="message-avatar user-avatar">
+                                    <span>👤</span>
+                                </div>
+                                <div class="message-content">
+                                    <div class="message-text">@item.Query</div>
+                                    <div class="message-timestamp">@item.Timestamp.ToString("MMM d, h:mm tt")</div>
+                                </div>
+                            </div>
+                            <div class="message assistant-message">
+                                <div class="message-avatar assistant-avatar">
+                                    <span>🤖</span>
+                                </div>
+                                <div class="message-content">
+                                    <div class="message-text">@((MarkupString)FormatResponse(item.Response))</div>
+                                    @if (HasSources(item.Response))
+                                    {
+                                        <div class="sources-indicator">Sources cited below</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (searchResponse != null && !conversationHistory.Any(ch => ch.Query == searchResponse.Query))
+                        {
+                            <div class="message user-message">
+                                <div class="message-avatar user-avatar">
+                                    <span>👤</span>
+                                </div>
+                                <div class="message-content">
+                                    <div class="message-text">@searchResponse.Query</div>
+                                </div>
+                            </div>
+                            <div class="message assistant-message">
+                                <div class="message-avatar assistant-avatar">
+                                    <span>🤖</span>
+                                </div>
+                                <div class="message-content">
+                                    @if (!string.IsNullOrEmpty(searchResponse.RAGResponse))
+                                    {
+                                        <div class="message-text">@((MarkupString)FormatResponse(searchResponse.RAGResponse))</div>
+                                        @if (searchResponse.Timing != null &&
+                                                            !string.IsNullOrEmpty(searchResponse.Timing.FormattedResponseTime))
+                                        {
+                                            <div class="response-time">Responded in @searchResponse.Timing.FormattedResponseTime</div>
+                                        }
+                                        @if (HasSources(searchResponse.RAGResponse))
+                                        {
+                                            <div class="sources-indicator">Sources cited below</div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div class="message-text no-response">No response generated.</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <!-- Sources Section (only show when there's a response) -->
+            @if (searchResponse != null && searchResponse.Sources?.Any() == true)
+            {
+                <div class="sources-section">
+                    <div class="sources-header">
+                        <h3>Sources (@searchResponse.Sources.Count)</h3>
+                        <button class="toggle-sources-btn" @onclick="ToggleSourcesVisibility">
+                            @if (areSourcesVisible)
                             {
-                                <div class="source-page">@source.PageInfo</div>
+                                <span>Hide Sources</span>
                             }
-                            <div class="source-content">
-                                @if (IsSourceExpanded(source))
-                                {
-                                    @source.Content
-                                }
-                                else
-                                {
-                                    @TruncateContent(source.Content, 150)
-                                }
-                            </div>
-                            <button class="toggle-content-btn" @onclick="() => ToggleSourceExpansion(source)">
-                                @if (IsSourceExpanded(source))
-                                {
-                                    <span>Show Less</span>
-                                }
-                                else
-                                {
-                                    <span>Show More</span>
-                                }
-                            </button>
+                            else
+                            {
+                                <span>Show Sources</span>
+                            }
+                        </button>
+                    </div>
+                    @if (areSourcesVisible)
+                    {
+                        <div class="sources-grid">
+                            @foreach (var source in searchResponse.Sources)
+                            {
+                                <div class="source-card">
+                                    <div class="source-header">
+                                        <h4 class="source-title">📄 @GetSourceName(source.Source)</h4>
+                                        <span class="source-score">@(((int)(source.Score * 100)).ToString())%</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(source.PageInfo))
+                                    {
+                                        <div class="source-page">@source.PageInfo</div>
+                                    }
+                                    <div class="source-content">
+                                        @if (IsSourceExpanded(source))
+                                        {
+                                            @source.Content
+                                        }
+                                        else
+                                        {
+                                            @TruncateContent(source.Content, 150)
+                                        }
+                                    </div>
+                                    <button class="toggle-content-btn" @onclick="() => ToggleSourceExpansion(source)">
+                                        @if (IsSourceExpanded(source))
+                                        {
+                                            <span>Show Less</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Show More</span>
+                                        }
+                                    </button>
+                                </div>
+                            }
                         </div>
                     }
                 </div>
             }
-        </div>
-    }
 
-    <!-- Input Area -->
-    <div class="chat-input-container">
-        <div class="input-area">
-            <div class="input-actions">
-                <button class="clear-btn" @onclick="ClearConversation" title="Clear conversation">
-                    🗑️
-                </button>
+            <!-- Input Area -->
+            <div class="chat-input-container">
+                <div class="input-area">
+                    <div class="input-actions">
+                        <button class="clear-btn" @onclick="ClearConversation" title="Clear conversation">
+                            🗑️
+                        </button>
+                    </div>
+                    <textarea class="chat-input" placeholder="Ask anything about your knowledge base..." @bind="searchQuery"
+                        @onkeypress="OnKeyPress" @oninput="OnInput" disabled="@isSearching" rows="1">
+                    </textarea>
+                    <button class="send-btn" @onclick="PerformSearch"
+                        disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
+                        @if (isSearching)
+                        {
+                            <span class="spinner"></span>
+                        }
+                        else
+                        {
+                            <span>➤</span>
+                        }
+                    </button>
+                </div>
+                <div class="input-hint">
+                    Press Enter to send, Shift+Enter for new line
+                </div>
             </div>
-            <textarea class="chat-input" placeholder="Ask anything about your knowledge base..." @bind="searchQuery"
-                @onkeypress="OnKeyPress" @oninput="OnInput" disabled="@isSearching" rows="1">
-            </textarea>
-            <button class="send-btn" @onclick="PerformSearch"
-                disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
-                @if (isSearching)
-                {
-                    <span class="spinner"></span>
-                }
-                else
-                {
-                    <span>➤</span>
-                }
-            </button>
-        </div>
-        <div class="input-hint">
-            Press Enter to send, Shift+Enter for new line
         </div>
     </div>
 </div>
-
-<style>
-    .claude-chat-container {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        max-width: 1200px;
-        margin: 0 auto;
-        background-color: #ffffff;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    }
-
-    /* Header Styles */
-    .chat-header {
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid #e5e5e5;
-        background-color: #f8f9fa;
-    }
-
-    .header-content {
-        max-width: 800px;
-        margin: 0 auto;
-        text-align: center;
-    }
-
-    .app-title {
-        font-size: 1.5rem;
-        font-weight: 600;
-        color: #1a73e8;
-        margin: 0;
-    }
-
-    .app-subtitle {
-        font-size: 0.9rem;
-        color: #5f6368;
-        margin: 0.25rem 0 0 0;
-    }
-
-    /* Status Banners */
-    .status-banner {
-        padding: 0.75rem 1.5rem;
-        border-bottom: 1px solid #e5e5e5;
-    }
-
-    .status-banner.success {
-        background-color: #e6f4ea;
-        color: #137333;
-    }
-
-    .status-banner.warning {
-        background-color: #fef7e0;
-        color: #b05a00;
-    }
-
-    .status-content {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        max-width: 800px;
-        margin: 0 auto;
-    }
-
-    .status-icon {
-        font-size: 1.25rem;
-    }
-
-    .status-text {
-        flex: 1;
-    }
-
-    .process-btn {
-        background-color: #1a73e8;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .process-btn:hover:not(:disabled) {
-        background-color: #1557b0;
-    }
-
-    .process-btn:disabled {
-        opacity: 0.7;
-        cursor: not-allowed;
-    }
-
-    .spinner {
-        width: 1rem;
-        height: 1rem;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-top: 2px solid white;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    @@keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
-    }
-
-    /* Error Banner */
-    .error-banner {
-        padding: 0.75rem 1.5rem;
-        background-color: #fce8e6;
-        color: #c5221f;
-        border-bottom: 1px solid #e5e5e5;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .error-icon {
-        font-size: 1.25rem;
-    }
-
-    /* Main Chat Area */
-    .chat-main {
-        flex: 1;
-        overflow-y: auto;
-        padding: 1rem 1.5rem;
-    }
-
-    .messages-container {
-        max-width: 800px;
-        margin: 0 auto;
-    }
-
-    /* Welcome Message */
-    .welcome-message {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100%;
-        padding: 2rem 0;
-    }
-
-    .welcome-content {
-        text-align: center;
-        max-width: 600px;
-    }
-
-    .welcome-icon {
-        font-size: 3rem;
-        margin-bottom: 1rem;
-    }
-
-    .welcome-content h2 {
-        font-size: 1.5rem;
-        font-weight: 500;
-        color: #202124;
-        margin-bottom: 0.5rem;
-    }
-
-    .welcome-content p {
-        color: #5f6368;
-        margin-bottom: 2rem;
-    }
-
-    .welcome-examples {
-        text-align: left;
-    }
-
-    .example-item {
-        background-color: #f1f3f4;
-        border-radius: 8px;
-        padding: 0.75rem;
-        margin-bottom: 0.75rem;
-        font-size: 0.9rem;
-        color: #5f6368;
-    }
-
-    /* Message Styles */
-    .message {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-        animation: fadeIn 0.2s ease-out;
-    }
-
-    @@keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .user-message {
-        flex-direction: row-reverse;
-    }
-
-    .message-avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        font-size: 1rem;
-    }
-
-    .user-avatar {
-        background-color: #1a73e8;
-        color: white;
-    }
-
-    .assistant-avatar {
-        background-color: #34a853;
-        color: white;
-    }
-
-    .message-content {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .user-message .message-content {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-    }
-
-    .message-text {
-        padding: 1rem 1.25rem;
-        border-radius: 18px;
-        line-height: 1.5;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-width: 100%;
-    }
-
-    .user-message .message-text {
-        background-color: #1a73e8;
-        color: white;
-        border-bottom-right-radius: 4px;
-    }
-
-    .assistant-message .message-text {
-        background-color: #f1f3f4;
-        color: #202124;
-        border-bottom-left-radius: 4px;
-    }
-
-    .message-timestamp {
-        font-size: 0.75rem;
-        color: #5f6368;
-        margin-top: 0.5rem;
-    }
-
-    .user-message .message-timestamp {
-        text-align: right;
-    }
-
-    .response-time {
-        font-size: 0.75rem;
-        color: #5f6368;
-        margin-top: 0.5rem;
-        font-style: italic;
-    }
-
-    .sources-indicator {
-        font-size: 0.75rem;
-        color: #1a73e8;
-        margin-top: 0.5rem;
-        font-weight: 500;
-    }
-
-    .no-response {
-        font-style: italic;
-        color: #5f6368;
-    }
-
-    /* Sources Section */
-    .sources-section {
-        border-top: 1px solid #e5e5e5;
-        padding: 1rem 1.5rem;
-        background-color: #f8f9fa;
-    }
-
-    .sources-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        max-width: 800px;
-        margin: 0 auto 1rem;
-    }
-
-    .sources-header h3 {
-        font-size: 1.125rem;
-        font-weight: 500;
-        color: #202124;
-        margin: 0;
-    }
-
-    .toggle-sources-btn {
-        background: none;
-        border: none;
-        color: #1a73e8;
-        font-size: 0.875rem;
-        cursor: pointer;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-    }
-
-    .toggle-sources-btn:hover {
-        background-color: #e8eaed;
-    }
-
-    .sources-grid {
-        max-width: 800px;
-        margin: 0 auto;
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1rem;
-    }
-
-    .source-card {
-        background-color: white;
-        border: 1px solid #dadce0;
-        border-radius: 8px;
-        padding: 1rem;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-
-    .source-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 0.5rem;
-    }
-
-    .source-title {
-        font-size: 0.9rem;
-        font-weight: 500;
-        color: #1a73e8;
-        margin: 0;
-        flex: 1;
-    }
-
-    .source-score {
-        background-color: #1a73e8;
-        color: white;
-        font-size: 0.75rem;
-        padding: 0.125rem 0.5rem;
-        border-radius: 12px;
-    }
-
-    .source-page {
-        font-size: 0.8rem;
-        color: #5f6368;
-        margin-bottom: 0.5rem;
-    }
-
-    .source-content {
-        font-size: 0.85rem;
-        color: #202124;
-        line-height: 1.5;
-        margin-bottom: 0.75rem;
-    }
-
-    .toggle-content-btn {
-        background: none;
-        border: none;
-        color: #1a73e8;
-        font-size: 0.8rem;
-        cursor: pointer;
-        padding: 0;
-        text-decoration: underline;
-    }
-
-    /* Input Area */
-    .chat-input-container {
-        padding: 1rem 1.5rem;
-        border-top: 1px solid #e5e5e5;
-        background-color: white;
-    }
-
-    .input-area {
-        display: flex;
-        align-items: flex-end;
-        gap: 0.75rem;
-        max-width: 800px;
-        margin: 0 auto;
-        position: relative;
-    }
-
-    .input-actions {
-        position: absolute;
-        left: -3rem;
-        bottom: 0.5rem;
-    }
-
-    .clear-btn {
-        background: none;
-        border: none;
-        font-size: 1.25rem;
-        cursor: pointer;
-        padding: 0.25rem;
-        border-radius: 4px;
-        color: #5f6368;
-    }
-
-    .clear-btn:hover {
-        background-color: #f1f3f4;
-    }
-
-    .chat-input {
-        flex: 1;
-        border: 1px solid #dadce0;
-        border-radius: 18px;
-        padding: 0.75rem 1.25rem;
-        font-size: 1rem;
-        resize: none;
-        min-height: 56px;
-        max-height: 200px;
-        outline: none;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-
-    .chat-input:focus {
-        border-color: #1a73e8;
-        box-shadow: 0 1px 2px rgba(26, 115, 232, 0.2);
-    }
-
-    .send-btn {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        border: none;
-        background-color: #1a73e8;
-        color: white;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.25rem;
-        flex-shrink: 0;
-    }
-
-    .send-btn:hover:not(:disabled) {
-        background-color: #1557b0;
-    }
-
-    .send-btn:disabled {
-        background-color: #dadce0;
-        cursor: not-allowed;
-    }
-
-    .input-hint {
-        text-align: center;
-        font-size: 0.75rem;
-        color: #5f6368;
-        margin-top: 0.5rem;
-    }
-
-    /* Responsive Design */
-    @@media (max-width: 768px) {
-        .chat-header {
-            padding: 0.75rem 1rem;
-        }
-
-        .app-title {
-            font-size: 1.25rem;
-        }
-
-        .status-content,
-        .messages-container,
-        .sources-grid,
-        .input-area {
-            padding-left: 1rem;
-            padding-right: 1rem;
-        }
-
-        .input-actions {
-            position: static;
-            order: -1;
-        }
-
-        .input-area {
-            flex-wrap: wrap;
-        }
-
-        .chat-input {
-            order: -1;
-            width: 100%;
-        }
-
-        .message {
-            gap: 0.75rem;
-        }
-
-        .message-avatar {
-            width: 32px;
-            height: 32px;
-        }
-
-        .message-text {
-            padding: 0.75rem 1rem;
-        }
-    }
-</style>
 
 @code {
     private string searchQuery = "";
@@ -723,17 +245,57 @@
     private bool collectionExists = false;
     private string statusMessage = "";
     private string searchError = "";
-    private SearchResponse? searchResponse;
+    private LocalAI.Web.Services.SearchResponse? searchResponse;
     private bool isResponseExpanded = false;
-    private HashSet<SearchResult> expandedSources = new HashSet<SearchResult>();
+    private HashSet<LocalAI.Core.Models.SearchResult> expandedSources = new HashSet<LocalAI.Core.Models.SearchResult>();
     private List<ConversationHistoryItem> conversationHistory = new List<ConversationHistoryItem>();
     private ElementReference chatContainer;
-    private bool areSourcesVisible = true;
+    private bool areSourcesVisible = false;
+    
+    // Chat management properties
+    private List<LocalAI.Core.Models.ChatConversationSummary> conversations = new List<LocalAI.Core.Models.ChatConversationSummary>();
+    private LocalAI.Core.Models.ChatConversation? currentConversation;
+    private bool isSidebarOpen = true;
+    private bool conversationsLoading = false;
 
     protected override async Task OnInitializedAsync()
     {
+        Console.WriteLine("OnInitializedAsync called");
         await CheckCollectionStatus();
         conversationHistory = await ConversationService.GetConversationHistoryAsync();
+        Console.WriteLine($"Loaded {conversationHistory.Count} items from conversation history");
+        
+        // Create initial conversation
+        await CreateInitialConversation();
+        await LoadConversations();
+        Console.WriteLine("OnInitializedAsync completed");
+    }
+
+    private async Task CreateInitialConversation()
+    {
+        try
+        {
+            Console.WriteLine("Creating initial conversation");
+            var response = await ApiService.CreateConversationAsync();
+            if (response.Success && response.Data != null)
+            {
+                currentConversation = response.Data;
+                Console.WriteLine($"Initial conversation created: {currentConversation.Id}");
+            }
+            else
+            {
+                Console.WriteLine($"Failed to create initial conversation: {response.Error}");
+                // Initialize with a null conversation if API fails
+                currentConversation = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating initial conversation: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            // Initialize with a null conversation if API fails
+            currentConversation = null;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -839,6 +401,18 @@
 
                 // Refresh conversation history
                 conversationHistory = await ConversationService.GetConversationHistoryAsync();
+                
+                // Save messages to current conversation if it exists
+                if (currentConversation != null)
+                {
+                    // Add user message
+                    await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", searchQuery.Trim());
+                    // Add assistant message
+                    await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", searchResponse.RAGResponse);
+                }
+                
+                // Clear searchResponse to avoid duplication
+                searchResponse = null;
             }
             else
             {
@@ -926,5 +500,127 @@
     private void ToggleSourcesVisibility()
     {
         areSourcesVisible = !areSourcesVisible;
+    }
+
+    // Chat management methods
+    private async Task LoadConversations()
+    {
+        conversationsLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await ApiService.GetConversationsAsync();
+            if (response.Success && response.Data != null)
+            {
+                conversations = response.Data;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading conversations: {ex.Message}");
+        }
+        finally
+        {
+            conversationsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StartNewChat()
+    {
+        try
+        {
+            Console.WriteLine($"StartNewChat called. Current conversation: {currentConversation?.Id}, History count: {conversationHistory.Count}");
+            
+            // Add immediate feedback
+            StateHasChanged();
+
+            // Messages are already saved to the current conversation in the PerformSearch method.
+            // All we need to do here is create a new conversation and refresh the list.
+            Console.WriteLine(currentConversation != null && conversationHistory.Any()
+                ? $"Finalizing conversation {currentConversation.Id} before starting a new one."
+                : "No active conversation to save, starting a new one.");
+
+            // Create a new conversation
+            Console.WriteLine("Creating new conversation");
+            var response = await ApiService.CreateConversationAsync();
+            if (response.Success && response.Data != null)
+            {
+                Console.WriteLine($"New conversation created: {response.Data.Id}");
+                currentConversation = response.Data;
+                await ClearConversation(); // Clear local session storage
+                await LoadConversations(); // Refresh conversation list
+                StateHasChanged();
+            }
+            else
+            {
+                Console.WriteLine($"Failed to create new conversation: {response.Error}");
+                // Even if API fails, clear local conversation
+                await ClearConversation();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating new conversation: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            // Even if there's an error, clear local conversation
+            await ClearConversation();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadConversation(Guid conversationId)
+    {
+        try
+        {
+            var response = await ApiService.GetConversationAsync(conversationId);
+            if (response.Success && response.Data != null)
+            {
+                currentConversation = response.Data;
+                
+                // Convert API messages to conversation history items
+                var historyItems = new List<ConversationHistoryItem>();
+                for (int i = 0; i < response.Data.Messages.Count; i += 2)
+                {
+                    // Group user and assistant messages together
+                    var userMessage = response.Data.Messages[i];
+                    var assistantMessage = i + 1 < response.Data.Messages.Count ? response.Data.Messages[i + 1] : null;
+                    
+                    if (userMessage.Role == "user")
+                    {
+                        historyItems.Add(new ConversationHistoryItem
+                        {
+                            Query = userMessage.Content,
+                            Response = assistantMessage?.Role == "assistant" ? assistantMessage.Content : "",
+                            Timestamp = userMessage.Timestamp
+                        });
+                    }
+                }
+                
+                // Update local conversation history
+                conversationHistory = historyItems;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading conversation: {ex.Message}");
+        }
+    }
+
+    private void ToggleSidebar()
+    {
+        isSidebarOpen = !isSidebarOpen;
+    }
+
+    private string GetConversationTitle(LocalAI.Core.Models.ChatConversationSummary conv)
+    {
+        if (!string.IsNullOrEmpty(conv.Title) && conv.Title != "New Chat")
+            return conv.Title;
+            
+        // Generate title from first message if available
+        return "New Chat";
     }
 }
