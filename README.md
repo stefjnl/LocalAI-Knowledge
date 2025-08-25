@@ -242,8 +242,8 @@ var response = await ragService.GenerateResponseAsync(query, context);
     "Model": "text-embedding-nomic-embed-text-v2-moe"
   },
   "RAGService": {
-    "BaseUrl": "https://openrouter.ai/api/v1", 
-    "Model": "openrouter/qwen/qwen-3"
+    "BaseUrl": "http://localhost:1234", 
+    "Model": "qwen/qwen3-coder-30b"
   },
   "Qdrant": {
     "BaseUrl": "http://localhost:6333",
@@ -254,9 +254,9 @@ var response = await ragService.GenerateResponseAsync(query, context);
     "PDFs": "data/pdfs/"
   },
   "OpenRouter": {
-    "UseOpenRouter": true,
+    "UseOpenRouter": false,
     "ApiKey": "YOUR_API_KEY_HERE",
-    "Model": "openrouter/qwen/qwen-3",
+    "Model": "qwen/qwen3-coder",
     "Endpoint": "https://openrouter.ai/api/v1/chat/completions"
   }
 }
@@ -293,14 +293,14 @@ If you prefer to use local models instead of OpenRouter:
 
 1. Start LM Studio with the required models:
    - Embedding model: `text-embedding-nomic-embed-text-v2-moe`
-   - Chat model: `qwen2.5-coder-7b-instruct` (or similar)
+   - Chat model: `qwen/qwen3-coder-30b`
 
 2. Update `appsettings.json`:
    ```json
    {
      "RAGService": {
        "BaseUrl": "http://localhost:1234",
-       "Model": "qwen2.5-coder-7b-instruct"
+       "Model": "qwen/qwen3-coder-30b"
      },
      "OpenRouter": {
        "UseOpenRouter": false
