@@ -3,6 +3,7 @@ using LocalAI.Core.Interfaces;
 using LocalAI.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
 // Load environment variables
@@ -30,6 +31,7 @@ services.AddScoped<IVectorSearchService, VectorSearchService>();
 services.AddScoped<IDocumentProcessor, DocumentProcessor>();
 services.AddScoped<IRAGService, RAGService>();
 services.AddScoped<IDisplayService, DisplayService>();
+services.AddLogging(builder => builder.AddConsole());
 
 // Build service provider
 var serviceProvider = services.BuildServiceProvider();

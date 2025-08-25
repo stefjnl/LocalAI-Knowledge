@@ -180,3 +180,4 @@
 - Check port mappings and environment variable passing
 - Test both API and Console entry points
 - Consider resource constraints in containerized environments
+- use the existing docker-compose file (when present) to test and run the app

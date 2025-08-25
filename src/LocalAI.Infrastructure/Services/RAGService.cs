@@ -3,6 +3,7 @@ using System.Text.Json;
 using LocalAI.Core.Interfaces;
 using LocalAI.Core.Models;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace LocalAI.Infrastructure.Services
 {
@@ -11,16 +12,35 @@ namespace LocalAI.Infrastructure.Services
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
         private readonly string _model;
+        private readonly ILogger<RAGService> _logger;
 
-        public RAGService(HttpClient httpClient, IConfiguration configuration)
+        public RAGService(HttpClient httpClient, IConfiguration configuration, ILogger<RAGService> logger)
         {
             _httpClient = httpClient;
             _baseUrl = configuration["RAGService:BaseUrl"] ?? "http://localhost:1234";
             _model = configuration["RAGService:Model"] ?? LocalAI.Core.Models.Constants.DefaultChatModel;
+            _logger = logger;
         }
 
         public async Task<string> GenerateResponseAsync(string query, List<SearchResult> searchResults)
         {
+            return await GenerateResponseAsync(query, searchResults, new List<ConversationExchange>());
+        }
+
+        public async Task<string> GenerateResponseAsync(string query, List<SearchResult> searchResults, List<ConversationExchange> conversationContext)
+        {
+            // Log incoming parameters
+            _logger.LogInformation("[DEBUG] RAG Service context parameter: {Count} exchanges received", conversationContext?.Count ?? 0);
+            if (conversationContext != null && conversationContext.Any())
+            {
+                for (int i = 0; i < conversationContext.Count; i++)
+                {
+                    var exchange = conversationContext[i];
+                    _logger.LogInformation("[DEBUG] RAG Context Exchange {Index} - User: {Query}", i + 1, exchange.Query);
+                    _logger.LogInformation("[DEBUG] RAG Context Exchange {Index} - Assistant: {Response}", i + 1, exchange.Response);
+                }
+            }
+
             // OPTIMIZATION 1: Truncate and summarize context instead of including everything
             var contextBuilder = new StringBuilder();
             contextBuilder.AppendLine("=== RELEVANT KNOWLEDGE ===\n");
@@ -32,7 +52,14 @@ namespace LocalAI.Infrastructure.Services
                 contextBuilder.AppendLine($"Relevance: {result.Score:F2}\n");
             }
 
-            // In RAGService.cs - Replace the existing prompt with this enhanced version:
+            // Add conversation context to the prompt if available
+            var conversationContextText = "";
+            if (conversationContext != null && conversationContext.Any())
+            {
+                var contextText = string.Join("\n\n", conversationContext.Select(ex =>
+                    $"User: {ex.Query}\nAssistant: {ex.Response}"));
+                conversationContextText = $"\n\n=== CONVERSATION CONTEXT ===\n{contextText}\n\n";
+            }
 
             var systemPrompt = @"You are an expert knowledge assistant. Respond like Claude Sonnet 4 with these characteristics:
 
@@ -57,7 +84,7 @@ namespace LocalAI.Infrastructure.Services
 
                 Answer based strictly on the provided knowledge sources. If the sources don't contain enough information for a complete answer, acknowledge this and work with what's available.";
 
-            var userPrompt = $@"Based on the following knowledge sources, provide a comprehensive answer to the user's question:
+            var userPrompt = $@"Based on the following knowledge sources, provide a comprehensive answer to the user's question:{conversationContextText}
 
                 KNOWLEDGE SOURCES:
                 {contextBuilder}
@@ -65,6 +92,9 @@ namespace LocalAI.Infrastructure.Services
                 USER QUESTION: {query}
 
                 Provide a thorough, well-structured response that addresses the question completely while staying true to the source material.";
+
+            // Log the final prompt being sent to the LLM
+            _logger.LogInformation("[DEBUG] Final LLM Prompt: {Prompt}", userPrompt);
 
             var payload = JsonSerializer.Serialize(new
             {

@@ -31,10 +31,27 @@ public class ApiService : IApiService
         };
     }
 
-    public async Task<ApiResponse<SearchResponse>> SearchAsync(string query, int limit = 8, List<ConversationExchange>? context = null)
+    public async Task<ApiResponse<SearchResponse>> SearchAsync(string query, int limit = 8, List<LocalAI.Core.Models.ConversationExchange>? context = null)
     {
         try
         {
+            // Log context being sent
+            Console.WriteLine($"[DEBUG] ApiService sending request: {query}");
+            if (context != null && context.Any())
+            {
+                Console.WriteLine($"[DEBUG] ApiService sending conversation history: {context.Count} exchanges");
+                for (int i = 0; i < context.Count; i++)
+                {
+                    var exchange = context[i];
+                    Console.WriteLine($"[DEBUG] ApiService Exchange {i + 1} - User: {exchange.Query}");
+                    Console.WriteLine($"[DEBUG] ApiService Exchange {i + 1} - Assistant: {exchange.Response}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("[DEBUG] ApiService sending no conversation history");
+            }
+
             var request = new SearchRequest(query, limit, context);
             var response = await _httpClient.PostAsJsonAsync("/api/search", request);
 
@@ -207,13 +224,7 @@ public class ApiService : IApiService
 }
 
 // DTOs matching the actual API responses
-public record SearchRequest(string Query, int? Limit = 8, List<ConversationExchange>? Context = null);
-
-public record ConversationExchange
-{
-    public string Query { get; set; } = string.Empty;
-    public string Response { get; set; } = string.Empty;
-}
+public record SearchRequest(string Query, int? Limit = 8, List<LocalAI.Core.Models.ConversationExchange>? Context = null);
 
 public record TimingInfo
 {

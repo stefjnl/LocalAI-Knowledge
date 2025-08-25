@@ -1,0 +1,23 @@
+### Get all sessions
+GET http://localhost:7190/api/sessions
+
+### Create a new session
+POST http://localhost:7190/api/sessions
+
+### Get a specific session (replace {sessionId} with actual ID)
+GET http://localhost:7190/api/sessions/{sessionId}
+
+### Get messages for a session (replace {sessionId} with actual ID)
+GET http://localhost:7190/api/sessions/{sessionId}/messages
+
+### Add a message to a session (replace {sessionId} with actual ID)
+POST http://localhost:7190/api/sessions/{sessionId}/messages
+Content-Type: application/json
+
+{
+  "Content": "Hello, this is a test message",
+  "Role": "User"
+}
+
+### Delete a session (replace {sessionId} with actual ID)
+DELETE http://localhost:7190/api/sessions/{sessionId}
