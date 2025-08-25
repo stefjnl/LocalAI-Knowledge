@@ -36,14 +36,28 @@ public class ConversationService : IConversationService
             var json = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", StorageKey);
             if (string.IsNullOrEmpty(json))
             {
+                Console.WriteLine("[DEBUG] No conversation history found in sessionStorage");
                 return new List<ConversationHistoryItem>();
             }
 
             var history = System.Text.Json.JsonSerializer.Deserialize<List<ConversationHistoryItem>>(json);
-            return history ?? new List<ConversationHistoryItem>();
+            var result = history ?? new List<ConversationHistoryItem>();
+            
+            // Log the history being retrieved for debugging
+            Console.WriteLine($"[DEBUG] Retrieved conversation history with {result.Count} exchanges");
+            for (int i = 0; i < result.Count; i++)
+            {
+                var item = result[i];
+                Console.WriteLine($"[DEBUG] History Exchange {i + 1} - User: {item.Query}");
+                Console.WriteLine($"[DEBUG] History Exchange {i + 1} - Assistant: {item.Response}");
+            }
+            
+            return result;
         }
-        catch
+        catch (Exception ex)
         {
+            // Log the error for debugging
+            Console.WriteLine($"[DEBUG] Error retrieving conversation history: {ex.Message}");
             return new List<ConversationHistoryItem>();
         }
     }
@@ -70,9 +84,16 @@ public class ConversationService : IConversationService
 
             var json = System.Text.Json.JsonSerializer.Serialize(history);
             await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", StorageKey, json);
+            
+            // Log the addition for debugging
+            Console.WriteLine($"[DEBUG] Added conversation exchange - User: {query}");
+            Console.WriteLine($"[DEBUG] Added conversation exchange - Assistant: {response}");
+            Console.WriteLine($"[DEBUG] Conversation history now contains {history.Count} exchanges");
         }
-        catch
+        catch (Exception ex)
         {
+            // Log the error for debugging
+            Console.WriteLine($"[DEBUG] Error adding to conversation history: {ex.Message}");
             // Silently fail if sessionStorage is not available
         }
     }
@@ -93,6 +114,15 @@ public class ConversationService : IConversationService
     {
         var history = await GetConversationHistoryAsync();
         var recentItems = history.TakeLast(count).ToList();
+
+        // Log the context being retrieved for debugging
+        Console.WriteLine($"[DEBUG] Retrieved conversation context with {recentItems.Count} exchanges");
+        for (int i = 0; i < recentItems.Count; i++)
+        {
+            var item = recentItems[i];
+            Console.WriteLine($"[DEBUG] Context Exchange {i + 1} - User: {item.Query}");
+            Console.WriteLine($"[DEBUG] Context Exchange {i + 1} - Assistant: {item.Response}");
+        }
 
         // Convert to ConversationExchange (without timestamp)
         return recentItems.Select(item => new LocalAI.Core.Models.ConversationExchange
