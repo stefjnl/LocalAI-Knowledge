@@ -2,67 +2,82 @@
 @using LocalAI.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.Extensions.Logging
+@using Microsoft.JSInterop
 @inject IApiService ApiService
 @inject ILogger<Documents> Logger
+@inject IJSRuntime JSRuntime
 @rendermode @(new InteractiveServerRenderMode())
 
-<PageTitle>Document Processing</PageTitle>
+<PageTitle>Document Management</PageTitle>
 
 <div class="container-fluid py-4">
     <div class="row justify-content-center">
-        <div class="col-lg-10">
-
+        <div class="col-12">
+            <!-- Header -->
             <div class="text-center mb-4">
-                <h1 class="display-5 fw-bold text-primary">Document Processing</h1>
-                <p class="lead text-muted">Process your knowledge base documents for semantic search</p>
+                <h1 class="display-5 fw-bold text-primary">📚 Document Management</h1>
+                <p class="lead text-muted">Organize and process your knowledge base documents</p>
             </div>
 
+            <!-- Processing Controls -->
             <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Process Documents</h5>
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">⚙️ Processing Controls</h5>
+                    <span class="badge bg-light text-dark">@processedDocumentCount Documents Processed</span>
                 </div>
                 <div class="card-body">
-                    <p>Process all documents in your data directories to create searchable embeddings.</p>
-                    <p><strong>Current data paths:</strong></p>
-                    <ul>
-                        <li>Transcripts: data/transcripts/</li>
-                        <li>PDFs: data/pdfs/</li>
-                    </ul>
-
-                    <button type="button" class="btn btn-primary" @onclick="ProcessDocuments" disabled="@isProcessing">
-                        @if (isProcessing)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                            <span>Processing...</span>
-                        }
-                        else
-                        {
-                            <span>🚀 Process All Documents</span>
-                        }
-                    </button>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" class="btn btn-primary" @onclick="ProcessAllDocuments" disabled="@isProcessing">
+                            @if (isProcessing && processingType == "all")
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                <span>Processing All...</span>
+                            }
+                            else
+                            {
+                                <span>🚀 Process All Documents</span>
+                            }
+                        </button>
+                        <button type="button" class="btn btn-success" @onclick="ProcessNewDocuments" disabled="@isProcessing">
+                            @if (isProcessing && processingType == "new")
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                <span>Processing New...</span>
+                            }
+                            else
+                            {
+                                <span>🆕 Process New Documents</span>
+                            }
+                        </button>
+                        <button type="button" class="btn btn-info" @onclick="RefreshData">
+                            <span>🔄 Refresh</span>
+                        </button>
+                    </div>
+                    <div class="alert alert-info mb-0" role="alert">
+                        <i class="bi bi-info-circle"></i> Process documents to make them searchable in your knowledge base
+                    </div>
                 </div>
             </div>
 
+            <!-- Upload Section -->
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0">Upload New Documents</h5>
+                    <h5 class="mb-0">📤 Upload New Documents</h5>
                 </div>
                 <div class="card-body">
-                    <p>Upload new documents to be processed and added to your knowledge base.</p>
-
-                    <div class="mb-3">
-                        <label for="documentType" class="form-label">Document Type</label>
-                        <select class="form-select" id="documentType" @bind="selectedDocumentType">
-                            <option value="transcript">Transcript (.txt)</option>
-                            <option value="pdf">PDF Document (.pdf)</option>
-                        </select>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="documentType" class="form-label">Document Type</label>
+                            <select class="form-select" id="documentType" @bind="selectedDocumentType">
+                                <option value="transcript">Transcript (.txt)</option>
+                                <option value="pdf">PDF Document (.pdf)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="fileUpload" class="form-label">Select File</label>
+                            <InputFile id="fileUpload" class="form-control" accept=".txt,.pdf" OnChange="OnFileSelected" />
+                        </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label for="fileUpload" class="form-label">Select File</label>
-                        <InputFile id="fileUpload" class="form-control" accept=".txt,.pdf" OnChange="OnFileSelected" />
-                    </div>
-
                     <button type="button" class="btn btn-success" @onclick="UploadDocument"
                         disabled="@(isUploading || selectedFile == null)">
                         @if (isUploading)
@@ -72,154 +87,143 @@
                         }
                         else
                         {
-                            <span>📤 Upload and Process Document</span>
+                            <span>📤 Upload and Process</span>
                         }
                     </button>
                 </div>
             </div>
 
-            @if (currentSessionDocuments.Any())
-            {
-                <div class="card shadow-sm border-0 mb-4">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">Current Session - Processed Documents</h5>
+            <!-- Document Categories -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">📂 Document Categories</h5>
+                    <div class="d-flex align-items-center">
+                        <input type="text" class="form-control form-control-sm me-2" placeholder="Search documents..." @bind="searchTerm" />
+                        <span class="badge bg-light text-dark">@filteredDocumentCount/@processedDocumentCount Documents</span>
                     </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Document Name</th>
-                                        <th>Type</th>
-                                        <th>Chunks Processed</th>
-                                        <th>Processing Duration</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var doc in currentSessionDocuments)
-                                    {
-                                        <tr>
-                                            <td>@doc.Name</td>
-                                            <td>@doc.Type</td>
-                                            <td>@doc.ChunksProcessed</td>
-                                            <td>@doc.ProcessingDuration</td>
-                                            <td>
-                                                @if (doc.Success)
+                </div>
+                <div class="card-body">
+                    @if (isDataLoading)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading document data...</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="accordion" id="documentCategories">
+                            @foreach (var category in documentCategories)
+                            {
+                                var categoryDocuments = GetDocumentsForCategory(category.Key);
+                                var filteredCategoryDocuments = categoryDocuments.Where(d => string.IsNullOrEmpty(searchTerm) || 
+                                    d.FileName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+                                
+                                if (filteredCategoryDocuments.Any() || string.IsNullOrEmpty(searchTerm))
+                                {
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="heading-@category.Key">
+                                            <button class="accordion-button @(category.Key != "pdfs" ? "collapsed" : "")" 
+                                                    type="button" 
+                                                    data-bs-toggle="collapse" 
+                                                    data-bs-target="#collapse-@category.Key" 
+                                                    aria-expanded="@(category.Key == "pdfs" ? "true" : "false")" 
+                                                    aria-controls="collapse-@category.Key">
+                                                <div class="d-flex align-items-center">
+                                                    <span class="category-icon me-2">@category.Value.Icon</span>
+                                                    <span class="fw-bold">@category.Value.Name</span>
+                                                    <span class="badge bg-primary ms-2">@filteredCategoryDocuments.Count</span>
+                                                </div>
+                                            </button>
+                                        </h2>
+                                        <div id="collapse-@category.Key" class="accordion-collapse collapse @(category.Key == "pdfs" ? "show" : "")" 
+                                             aria-labelledby="heading-@category.Key" 
+                                             data-bs-parent="#documentCategories">
+                                            <div class="accordion-body">
+                                                @if (filteredCategoryDocuments.Any())
                                                 {
-                                                    <span class="badge bg-success">Success</span>
+                                                    <div class="table-responsive">
+                                                        <table class="table table-hover">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Document</th>
+                                                                    <th>Chunks</th>
+                                                                    <th>Processed</th>
+                                                                    <th>Status</th>
+                                                                    <th>Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var doc in filteredCategoryDocuments)
+                                                                {
+                                                                    <tr>
+                                                                        <td>
+                                                                            <div class="d-flex align-items-center">
+                                                                                <i class="bi bi-file-earmark-text me-2 text-primary"></i>
+                                                                                <div>
+                                                                                    <div class="fw-bold">@doc.FileName</div>
+                                                                                    <small class="text-muted">@GetFileSize(doc.FileName)</small>
+                                                                                </div>
+                                                                            </div>
+                                                                        </td>
+                                                                        <td>
+                                                                            <span class="badge bg-info">@doc.ChunksProcessed</span>
+                                                                        </td>
+                                                                        <td>
+                                                                            <small>@doc.ProcessedAt</small>
+                                                                        </td>
+                                                                        <td>
+                                                                            @if (doc.Success)
+                                                                            {
+                                                                                <span class="badge bg-success">Processed</span>
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                <span class="badge bg-danger" title="@doc.ErrorMessage">Failed</span>
+                                                                            }
+                                                                        </td>
+                                                                        <td>
+                                                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowDocumentDetails(doc)">
+                                                                                <i class="bi bi-info-circle"></i>
+                                                                            </button>
+                                                                            <button class="btn btn-sm btn-outline-warning ms-1" @onclick="() => ReprocessDocument(doc)" disabled="@isProcessing">
+                                                                                <i class="bi bi-arrow-repeat"></i>
+                                                                            </button>
+                                                                            <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteDocument(doc)" disabled="@isProcessing">
+                                                                                <i class="bi bi-trash"></i>
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
                                                 }
                                                 else
                                                 {
-                                                    <span class="badge bg-danger">Failed</span>
+                                                    <div class="text-center py-3">
+                                                        <i class="bi bi-folder text-muted" style="font-size: 2rem;"></i>
+                                                        <p class="mt-2 mb-0 text-muted">No documents found in this category</p>
+                                                    </div>
                                                 }
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
                         </div>
-                    </div>
+                    }
                 </div>
-            }
+            </div>
 
-            @if (lastRunDocuments.Any() || allProcessedDocuments.Any())
-            {
-                <div class="card shadow-sm border-0 mb-4">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">Document Processing Statistics</h5>
-                    </div>
-                    <div class="card-body">
-                        @if (lastRunDocuments.Any())
-                        {
-                            <h6>Last Processing Run (@lastRunDocuments.Count documents, @lastRunDocuments.Sum(d =>
-                                                        d.ChunksProcessed) chunks):</h6>
-                    <div class="table-responsive mb-4">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Document</th>
-                                    <th>Type</th>
-                                    <th>Chunks</th>
-                                    <th>Duration</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var doc in lastRunDocuments)
-                                        {
-                                            <tr>
-                                                <td>@doc.FileName</td>
-                                                <td>@doc.DocumentType</td>
-                                                <td>@doc.ChunksProcessed</td>
-                                                <td>@doc.ProcessingDuration</td>
-                                                <td>
-                                                    @if (doc.Success)
-                                                    {
-                                                        <span class="badge bg-success">✓</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge bg-danger">✗</span>
-                                                    }
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-
-                        @if (allProcessedDocuments.Any())
-                        {
-                            <h6>Total Processed Documents (@allProcessedDocuments.Count documents, @allProcessedDocuments.Sum(d
-                                                        => d.ChunksProcessed) chunks):</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Document</th>
-                                    <th>Type</th>
-                                    <th>Chunks</th>
-                                    <th>Duration</th>
-                                    <th>Processed At</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var doc in allProcessedDocuments.OrderByDescending(d => d.ProcessedAt))
-                                        {
-                                            <tr>
-                                                <td>@doc.FileName</td>
-                                                <td>@doc.DocumentType</td>
-                                                <td>@doc.ChunksProcessed</td>
-                                                <td>@doc.ProcessingDuration</td>
-                                                <td>@doc.ProcessedAt</td>
-                                                <td>
-                                                    @if (doc.Success)
-                                                    {
-                                                        <span class="badge bg-success">✓</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge bg-danger" title="@doc.ErrorMessage">✗</span>
-                                                    }
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-                    </div>
-                </div>
-            }
-
+            <!-- Processing Progress -->
             @if (isProcessing)
             {
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">Processing Progress</h5>
+                        <h5 class="mb-0">🔄 Processing Progress</h5>
                     </div>
                     <div class="card-body">
                         <div class="progress mb-3" style="height: 25px;">
@@ -237,6 +241,7 @@
                 </div>
             }
 
+            <!-- Processing Complete -->
             @if (processingComplete)
             {
                 <div class="card shadow-sm border-0">
@@ -244,14 +249,100 @@
                         <h5 class="mb-0">✅ Processing Complete</h5>
                     </div>
                     <div class="card-body">
-                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.
-                        </p>
+                        <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.</p>
                         <p>Your knowledge base is now ready for semantic search!</p>
                         <a href="/search" class="btn btn-primary">Start Searching</a>
                     </div>
                 </div>
             }
 
+            <!-- Document Details Modal -->
+            @if (selectedDocument != null)
+            {
+                <div class="modal fade show" style="display: block;" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header bg-primary text-white">
+                                <h5 class="modal-title">📄 @selectedDocument.FileName</h5>
+                                <button type="button" class="btn-close btn-close-white" @onclick="CloseDocumentDetails"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Document Information</h6>
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <td><strong>Type:</strong></td>
+                                                <td>@selectedDocument.DocumentType</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Chunks Processed:</strong></td>
+                                                <td>@selectedDocument.ChunksProcessed</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Processing Time:</strong></td>
+                                                <td>@selectedDocument.ProcessingDuration</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Processed At:</strong></td>
+                                                <td>@selectedDocument.ProcessedAt</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Status:</strong></td>
+                                                <td>
+                                                    @if (selectedDocument.Success)
+                                                    {
+                                                        <span class="badge bg-success">Success</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-danger">Failed</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>File Information</h6>
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <td><strong>File Size:</strong></td>
+                                                <td>@GetFileSize(selectedDocument.FileName)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>File Path:</strong></td>
+                                                <td>@GetFilePath(selectedDocument.FileName)</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                                @if (!selectedDocument.Success && !string.IsNullOrEmpty(selectedDocument.ErrorMessage))
+                                {
+                                    <div class="alert alert-warning mt-3">
+                                        <h6>Error Details:</h6>
+                                        <p class="mb-0">@selectedDocument.ErrorMessage</p>
+                                    </div>
+                                }
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" @onclick="CloseDocumentDetails">Close</button>
+                                <button type="button" class="btn btn-warning" @onclick="() => ReprocessDocument(selectedDocument)" disabled="@isProcessing">
+                                    @if (isProcessing && processingType == "reprocess")
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span>Reprocessing...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>🔄 Reprocess Document</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-backdrop fade show"></div>
+            }
         </div>
     </div>
 </div>
@@ -259,8 +350,9 @@
 @code {
     private bool isProcessing = false;
     private bool isUploading = false;
-    private bool collectionExists = false;
     private bool processingComplete = false;
+    private bool isDataLoading = false;
+    private string processingType = "";
     private string statusMessage = "";
     private int progressPercentage = 0;
     private string progressMessage = "Ready to process";
@@ -268,21 +360,40 @@
     private int processedChunks = 0;
     private string selectedDocumentType = "transcript";
     private IBrowserFile? selectedFile;
-
-    // Updated data structures using real API data
-    private List<ProcessedDocumentDisplay> currentSessionDocuments = new();
-    private List<ProcessedDocumentInfo> lastRunDocuments = new();
+    private string searchTerm = "";
+    
+    // Document data
     private List<ProcessedDocumentInfo> allProcessedDocuments = new();
+    private ProcessedDocumentInfo? selectedDocument;
+
+    // Document categories with icons and names
+    private Dictionary<string, (string Name, string Icon)> documentCategories = new()
+    {
+        { "pdfs", ("PDF Documents", "📚") },
+        { "pdfs/azure", ("Azure", "☁️") },
+        { "pdfs/devops", ("DevOps", "🔧") },
+        { "pdfs/dotnet", (".NET", "🔷") },
+        { "pdfs/llms", ("LLMs", "🤖") },
+        { "transcripts", ("Transcripts", "📝") }
+    };
+
+    // Computed properties
+    private int processedDocumentCount => allProcessedDocuments.Count;
+    private int filteredDocumentCount => string.IsNullOrEmpty(searchTerm) 
+        ? allProcessedDocuments.Count 
+        : allProcessedDocuments.Count(d => d.FileName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
-        Logger.LogInformation("DocumentProcessingPage initialized");
-        await CheckCollectionStatus();
+        Logger.LogInformation("Documents page initialized");
         await LoadProcessingData();
     }
 
     private async Task LoadProcessingData()
     {
+        isDataLoading = true;
+        StateHasChanged();
+        
         try
         {
             // Load all processed documents
@@ -292,56 +403,109 @@
                 allProcessedDocuments = allDocsResponse.Data.ProcessedFiles.ToList();
                 Logger.LogInformation($"Loaded {allProcessedDocuments.Count} processed documents");
             }
-
-            // Load last run details
-            var lastRunResponse = await ApiService.GetLastRunAsync();
-            if (lastRunResponse.Success && lastRunResponse.Data != null)
-            {
-                lastRunDocuments = lastRunResponse.Data.Documents.ToList();
-                Logger.LogInformation($"Loaded {lastRunDocuments.Count} documents from last run");
-            }
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error loading processing data");
             statusMessage = "Warning: Could not load processing history data.";
         }
+        finally
+        {
+            isDataLoading = false;
+            StateHasChanged();
+        }
     }
 
-    private async Task CheckCollectionStatus()
+    private List<ProcessedDocumentInfo> GetDocumentsForCategory(string category)
     {
-        Logger.LogInformation("Checking collection status");
+        if (category == "pdfs")
+        {
+            // Return all PDFs that are not in subcategories
+            return allProcessedDocuments
+                .Where(d => d.DocumentType == "PDF" && 
+                           !d.FileName.Contains("azure") && 
+                           !d.FileName.Contains("devops") && 
+                           !d.FileName.Contains("dotnet") && 
+                           !d.FileName.Contains("llms"))
+                .ToList();
+        }
+        
+        if (category == "transcripts")
+        {
+            return allProcessedDocuments
+                .Where(d => d.DocumentType == "Transcript")
+                .ToList();
+        }
+        
+        // Handle subcategories (azure, devops, etc.)
+        return allProcessedDocuments
+            .Where(d => d.DocumentType == "PDF" && 
+                       d.FileName.Contains(category.Replace("pdfs/", "")))
+            .ToList();
+    }
+
+    private async Task ProcessAllDocuments()
+    {
+        Logger.LogInformation("Starting processing of all documents");
+        await ProcessDocuments("all");
+    }
+
+    private async Task ProcessNewDocuments()
+    {
+        Logger.LogInformation("Starting processing of new documents");
+        processingType = "new";
+        isProcessing = true;
+        processingComplete = false;
+        progressPercentage = 0;
+        progressMessage = "Starting new document processing...";
+        progressDetails = "Initializing services";
+        processedChunks = 0;
+        statusMessage = "";
+
         try
         {
-            var response = await ApiService.GetCollectionStatusAsync();
+            Logger.LogInformation("Calling API to process new documents");
+            var response = await ApiService.ProcessNewDocumentsAsync();
+            Logger.LogInformation("Received API response for new document processing");
+
             if (response.Success && response.Data != null)
             {
-                collectionExists = response.Data.CollectionExists;
-                statusMessage = collectionExists
-                ? "Knowledge base is ready! You can start searching your documents."
-                : "Knowledge base not found. Process your documents to enable search.";
-                Logger.LogInformation($"Collection status check completed. Collection exists: {collectionExists}");
+                processedChunks = response.Data.ChunksProcessed;
+                processingComplete = true;
+                statusMessage = response.Data.Message;
+                progressMessage = "Processing complete!";
+                progressDetails = $"Processed {processedChunks} new document chunks";
+                progressPercentage = 100;
+                Logger.LogInformation($"New document processing completed successfully. Processed {processedChunks} chunks");
+
+                // Reload the processing data to reflect new state
+                await LoadProcessingData();
             }
             else
             {
-                statusMessage = "Unable to check knowledge base status. Make sure the API is running.";
-                Logger.LogWarning("Failed to get collection status: {0}", response.Error);
+                statusMessage = $"Error: {response.Error}";
+                Logger.LogWarning("New document processing failed: {0}", response.Error);
             }
         }
         catch (Exception ex)
         {
-            statusMessage = $"Error checking status: {ex.Message}";
-            Logger.LogError(ex, "Error checking collection status");
+            statusMessage = $"Error: {ex.Message}";
+            Logger.LogError(ex, "Unexpected error during new document processing");
+        }
+        finally
+        {
+            isProcessing = false;
+            processingType = "";
         }
     }
 
-    private async Task ProcessDocuments()
+    private async Task ProcessDocuments(string type)
     {
-        Logger.LogInformation("Starting document processing");
+        processingType = type;
         isProcessing = true;
         processingComplete = false;
         progressPercentage = 0;
-        progressMessage = "Starting document processing...";
+        progressMessage = $"Starting {type} document processing...";
         progressDetails = "Initializing services";
         processedChunks = 0;
         statusMessage = "";
@@ -356,23 +520,11 @@
             {
                 processedChunks = response.Data.ChunksProcessed;
                 processingComplete = true;
-                collectionExists = true;
                 statusMessage = response.Data.Message;
                 progressMessage = "Processing complete!";
                 progressDetails = $"Processed {processedChunks} document chunks";
                 progressPercentage = 100;
                 Logger.LogInformation($"Document processing completed successfully. Processed {processedChunks} chunks");
-
-                // Add to current session tracking
-                var sessionDoc = new ProcessedDocumentDisplay
-                {
-                    Name = "Batch Processing",
-                    Type = "All Documents",
-                    ChunksProcessed = response.Data.ChunksProcessed,
-                    ProcessingDuration = "Unknown", // Batch processing doesn't return duration
-                    Success = true
-                };
-                currentSessionDocuments.Add(sessionDoc);
 
                 // Reload the processing data to reflect new state
                 await LoadProcessingData();
@@ -391,6 +543,42 @@
         finally
         {
             isProcessing = false;
+            processingType = "";
+        }
+    }
+
+    private async Task ReprocessDocument(ProcessedDocumentInfo document)
+    {
+        Logger.LogInformation("Starting reprocessing of document: {0}", document.FileName);
+        processingType = "reprocess";
+        isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            // For now, we'll just call the same API endpoint
+            // In a more advanced implementation, we would implement a specific reprocessing endpoint
+            var response = await ApiService.ProcessDocumentsAsync();
+            
+            if (response.Success && response.Data != null)
+            {
+                Logger.LogInformation("Document reprocessing completed successfully");
+                // Reload data to show updated status
+                await LoadProcessingData();
+            }
+            else
+            {
+                Logger.LogWarning("Document reprocessing failed: {0}", response.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unexpected error during document reprocessing");
+        }
+        finally
+        {
+            isProcessing = false;
+            processingType = "";
         }
     }
 
@@ -410,6 +598,7 @@
 
         isUploading = true;
         statusMessage = "";
+        StateHasChanged();
 
         try
         {
@@ -428,17 +617,6 @@
             {
                 statusMessage = $"✅ {response.Data.Message}";
                 Logger.LogInformation("Document upload completed successfully. Processed {0} chunks", response.Data.ChunksProcessed);
-
-                // Add to current session tracking
-                currentSessionDocuments.Add(new ProcessedDocumentDisplay
-                {
-                    Name = selectedFile.Name,
-                    Type = selectedDocumentType == "pdf" ? "PDF" : "Transcript",
-                    ChunksProcessed = response.Data.ChunksProcessed,
-                    ProcessingDuration = response.Data.ProcessingDuration,
-                    Success = true
-                });
-
                 selectedFile = null;
 
                 // Reload processing data to include the new document
@@ -448,46 +626,91 @@
             {
                 statusMessage = $"Error uploading document: {response.Error}";
                 Logger.LogWarning("Document upload failed: {0}", response.Error);
-
-                // Add to current session tracking with error status
-                currentSessionDocuments.Add(new ProcessedDocumentDisplay
-                {
-                    Name = selectedFile.Name,
-                    Type = selectedDocumentType == "pdf" ? "PDF" : "Transcript",
-                    ChunksProcessed = 0,
-                    ProcessingDuration = "Failed",
-                    Success = false
-                });
             }
         }
         catch (Exception ex)
         {
             statusMessage = $"Error uploading document: {ex.Message}";
             Logger.LogError(ex, "Error uploading document {0}", selectedFile?.Name);
-
-            // Add to current session tracking with error status
-            currentSessionDocuments.Add(new ProcessedDocumentDisplay
-            {
-                Name = selectedFile?.Name ?? "Unknown",
-                Type = selectedDocumentType == "pdf" ? "PDF" : "Transcript",
-                ChunksProcessed = 0,
-                ProcessingDuration = "Failed",
-                Success = false
-            });
         }
         finally
         {
             isUploading = false;
+            StateHasChanged();
         }
     }
 
-    // Display model for current session (since we don't have all the metadata immediately)
-    public class ProcessedDocumentDisplay
+    private async Task RefreshData()
     {
-        public string Name { get; set; } = string.Empty;
-        public string Type { get; set; } = string.Empty;
-        public int ChunksProcessed { get; set; }
-        public string ProcessingDuration { get; set; } = string.Empty;
-        public bool Success { get; set; }
+        await LoadProcessingData();
+    }
+
+    private void ShowDocumentDetails(ProcessedDocumentInfo document)
+    {
+        selectedDocument = document;
+    }
+
+    private void CloseDocumentDetails()
+    {
+        selectedDocument = null;
+    }
+
+    private async Task DeleteDocument(ProcessedDocumentInfo document)
+    {
+        // Confirm deletion
+        var confirm = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete '{document.FileName}'? This will remove all its embeddings from the knowledge base.");
+        if (!confirm) return;
+
+        Logger.LogInformation("Deleting document: {0}", document.FileName);
+        statusMessage = $"Deleting document {document.FileName}...";
+        StateHasChanged();
+
+        try
+        {
+            var response = await ApiService.DeleteDocumentAsync(document.FileName);
+            
+            if (response.Success)
+            {
+                statusMessage = $"✅ {response.Data}";
+                Logger.LogInformation("Document deleted successfully: {0}", document.FileName);
+                
+                // Reload processing data to reflect the deletion
+                await LoadProcessingData();
+            }
+            else
+            {
+                statusMessage = $"Error deleting document: {response.Error}";
+                Logger.LogError("Error deleting document: {0}", response.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error deleting document: {ex.Message}";
+            Logger.LogError(ex, "Unexpected error during document deletion");
+        }
+    }
+
+    private string GetFileSize(string fileName)
+    {
+        // In a real implementation, we would get the actual file size
+        // For now, we'll return a placeholder
+        return "Unknown size";
+    }
+
+    private string GetFilePath(string fileName)
+    {
+        // Determine the file path based on the document type and name
+        if (fileName.Contains("azure"))
+            return $"data/pdfs/azure/{fileName}";
+        if (fileName.Contains("devops"))
+            return $"data/pdfs/devops/{fileName}";
+        if (fileName.Contains("dotnet"))
+            return $"data/pdfs/dotnet/{fileName}";
+        if (fileName.Contains("llms"))
+            return $"data/pdfs/llms/{fileName}";
+        if (fileName.EndsWith(".txt"))
+            return $"data/transcripts/{fileName}";
+        
+        return $"data/pdfs/{fileName}";
     }
 }

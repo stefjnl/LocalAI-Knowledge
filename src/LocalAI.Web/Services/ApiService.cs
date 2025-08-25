@@ -8,6 +8,8 @@ public interface IApiService
 {
     Task<ApiResponse<SearchResponse>> SearchAsync(string query, int limit = 8, List<ConversationExchange>? context = null);
     Task<ApiResponse<ProcessDocumentsResponse>> ProcessDocumentsAsync();
+    Task<ApiResponse<ProcessDocumentsResponse>> ProcessNewDocumentsAsync();
+    Task<ApiResponse<bool>> DeleteDocumentAsync(string documentName);
     Task<ApiResponse<CollectionStatusResponse>> GetCollectionStatusAsync();
     Task<ApiResponse<UploadDocumentResponse>> UploadDocumentAsync(string fileName, string fileType, byte[] fileContent);
     Task<ApiResponse<ProcessedDocumentsResponse>> GetProcessedDocumentsAsync();
@@ -98,6 +100,50 @@ public class ApiService : IApiService
         catch (Exception ex)
         {
             return new ApiResponse<ProcessDocumentsResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<ProcessDocumentsResponse>> ProcessNewDocumentsAsync()
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync("/api/documents/process-new", null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ProcessDocumentsResponse>(content, _jsonOptions);
+                return new ApiResponse<ProcessDocumentsResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<ProcessDocumentsResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ProcessDocumentsResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<bool>> DeleteDocumentAsync(string documentName)
+    {
+        try
+        {
+            var response = await _httpClient.DeleteAsync($"/api/documents/{documentName}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<bool>>(content, _jsonOptions);
+                return new ApiResponse<bool> { Success = true, Data = true };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<bool> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool> { Success = false, Error = ex.Message };
         }
     }
 

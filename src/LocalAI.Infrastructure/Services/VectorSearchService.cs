@@ -214,6 +214,51 @@ namespace LocalAI.Infrastructure.Services
             return searchResults;
         }
 
+        public async Task<bool> DeleteDocumentAsync(string documentName)
+        {
+            try
+            {
+                // Create filter to delete points with matching source
+                var filterPayload = JsonSerializer.Serialize(new
+                {
+                    filter = new
+                    {
+                        must = new[]
+                        {
+                            new
+                            {
+                                key = "source",
+                                match = new
+                                {
+                                    value = documentName
+                                }
+                            }
+                        }
+                    }
+                });
+
+                var filterContent = new StringContent(filterPayload, System.Text.Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync($"{_baseUrl}/collections/{_collectionName}/points/delete", filterContent);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"✅ Successfully deleted document '{documentName}' from vector database");
+                    return true;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"❌ Failed to delete document '{documentName}' - HTTP {response.StatusCode}: {errorContent}");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error deleting document '{documentName}': {ex.Message}");
+                return false;
+            }
+        }
+
         private static string GetSourceDisplayName(string source, string type, string pageInfo)
         {
             if (type == "pdf")
