@@ -507,6 +507,24 @@
     font-style: italic;
 }
 
+.response-metadata {
+    margin-top: 0.5rem;
+}
+
+.response-details {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.7rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+}
+
+.detail-item {
+    background-color: #f1f5f9;
+    padding: 0.125rem 0.5rem;
+    border-radius: 12px;
+}
+
 .sources-indicator {
     font-size: 0.75rem;
     color: #1a73e8;
@@ -613,6 +631,7 @@
     border-radius: 8px;
     padding: 1rem;
     border: 1px solid #334155;
+    position: relative;
 }
 
 .message-text :global(pre code) {
@@ -622,6 +641,67 @@
     color: #f8fafc;
     padding: 0;
     border: none;
+    line-height: 1.5;
+    display: block;
+}
+
+/* Syntax highlighting colors */
+.message-text :global(pre code .token.comment),
+.message-text :global(pre code .token.prolog),
+.message-text :global(pre code .token.doctype),
+.message-text :global(pre code .token.cdata) {
+    color: #94a3b8;
+}
+
+.message-text :global(pre code .token.punctuation) {
+    color: #cbd5e1;
+}
+
+.message-text :global(pre code .token.property),
+.message-text :global(pre code .token.tag),
+.message-text :global(pre code .token.constant),
+.message-text :global(pre code .token.symbol),
+.message-text :global(pre code .token.deleted) {
+    color: #f87171;
+}
+
+.message-text :global(pre code .token.boolean),
+.message-text :global(pre code .token.number) {
+    color: #fbbf24;
+}
+
+.message-text :global(pre code .token.selector),
+.message-text :global(pre code .token.attr-name),
+.message-text :global(pre code .token.string),
+.message-text :global(pre code .token.char),
+.message-text :global(pre code .token.builtin),
+.message-text :global(pre code .token.inserted) {
+    color: #34d399;
+}
+
+.message-text :global(pre code .token.operator),
+.message-text :global(pre code .token.entity),
+.message-text :global(pre code .token.url),
+.message-text :global(pre code .language-css .token.string),
+.message-text :global(pre code .style .token.string),
+.message-text :global(pre code .token.variable) {
+    color: #a78bfa;
+}
+
+.message-text :global(pre code .token.atrule),
+.message-text :global(pre code .token.attr-value),
+.message-text :global(pre code .token.function),
+.message-text :global(pre code .token.class-name) {
+    color: #60a5fa;
+}
+
+.message-text :global(pre code .token.keyword) {
+    color: #ec4899;
+}
+
+.message-text :global(pre code .token.regex),
+.message-text :global(pre code .token.important) {
+    color: #fbbf24;
 }
 
 .message-text :global(blockquote) {
