@@ -159,11 +159,12 @@
                                 {
                                     <div class="accordion-item">
                                         <h2 class="accordion-header" id="heading-@category.Key">
-                                            <button class="accordion-button @(category.Key != "pdfs" ? "collapsed" : "")" 
+                                            <button class="accordion-button @((categoryExpanded.ContainsKey(category.Key) && categoryExpanded[category.Key]) ? "" : "collapsed")" 
                                                     type="button" 
+                                                    @onclick="() => ToggleCategory(category.Key)"
                                                     data-bs-toggle="collapse" 
                                                     data-bs-target="#collapse-@category.Key" 
-                                                    aria-expanded="@(category.Key == "pdfs" ? "true" : "false")" 
+                                                    aria-expanded="@((categoryExpanded.ContainsKey(category.Key) && categoryExpanded[category.Key]).ToString().ToLower())" 
                                                     aria-controls="collapse-@category.Key">
                                                 <div class="d-flex align-items-center">
                                                     <span class="category-icon me-2">@category.Value.Icon</span>
@@ -172,7 +173,7 @@
                                                 </div>
                                             </button>
                                         </h2>
-                                        <div id="collapse-@category.Key" class="accordion-collapse collapse @(category.Key == "pdfs" ? "show" : "")" 
+                                        <div id="collapse-@category.Key" class="accordion-collapse collapse @((categoryExpanded.ContainsKey(category.Key) && categoryExpanded[category.Key]) ? "show" : "")" 
                                              aria-labelledby="heading-@category.Key" 
                                              data-bs-parent="#documentCategories">
                                             <div class="accordion-body">
@@ -423,14 +424,13 @@
     private List<ProcessedDocumentInfo> allProcessedDocuments = new();
     private ProcessedDocumentInfo? selectedDocument;
 
+    // Track expanded state of categories
+    private Dictionary<string, bool> categoryExpanded = new();
+
     // Document categories with icons and names
     private Dictionary<string, (string Name, string Icon)> documentCategories = new()
     {
         { "pdfs", ("PDF Documents", "📚") },
-        { "pdfs/azure", ("Azure", "☁️") },
-        { "pdfs/devops", ("DevOps", "🔧") },
-        { "pdfs/dotnet", (".NET", "🔷") },
-        { "pdfs/llms", ("LLMs", "🤖") },
         { "transcripts", ("Transcripts", "📝") },
         { "webpages", ("Web Pages", "🌐") }
     };
@@ -444,6 +444,11 @@
     protected override async Task OnInitializedAsync()
     {
         Logger.LogInformation("Documents page initialized");
+        // Initialize category expanded state
+        foreach (var category in documentCategories.Keys)
+        {
+            categoryExpanded[category] = false;
+        }
         await LoadProcessingData();
     }
 
@@ -478,13 +483,9 @@
     {
         if (category == "pdfs")
         {
-            // Return all PDFs that are not in subcategories
+            // Return all PDF documents
             return allProcessedDocuments
-                .Where(d => d.DocumentType == "PDF" &&
-                           !d.FileName.Contains("azure") &&
-                           !d.FileName.Contains("devops") &&
-                           !d.FileName.Contains("dotnet") &&
-                           !d.FileName.Contains("llms"))
+                .Where(d => d.DocumentType == "PDF")
                 .ToList();
         }
 
@@ -502,11 +503,8 @@
                 .ToList();
         }
 
-        // Handle subcategories (azure, devops, etc.)
-        return allProcessedDocuments
-            .Where(d => d.DocumentType == "PDF" &&
-                       d.FileName.Contains(category.Replace("pdfs/", "")))
-            .ToList();
+        // Return empty list for any other categories
+        return new List<ProcessedDocumentInfo>();
     }
 
     private async Task ProcessAllDocuments()
@@ -846,6 +844,20 @@
         await LoadProcessingData();
     }
 
+    private void ToggleCategory(string categoryKey)
+    {
+        // Toggle the expanded state for this category
+        if (categoryExpanded.ContainsKey(categoryKey))
+        {
+            categoryExpanded[categoryKey] = !categoryExpanded[categoryKey];
+        }
+        else
+        {
+            categoryExpanded[categoryKey] = true;
+        }
+        StateHasChanged();
+    }
+
     private void ShowDocumentDetails(ProcessedDocumentInfo document)
     {
         selectedDocument = document;
@@ -900,18 +912,13 @@
 
     private string GetFilePath(string fileName)
     {
-        // Determine the file path based on the document type and name
-        if (fileName.Contains("azure"))
-            return $"data/pdfs/azure/{fileName}";
-        if (fileName.Contains("devops"))
-            return $"data/pdfs/devops/{fileName}";
-        if (fileName.Contains("dotnet"))
-            return $"data/pdfs/dotnet/{fileName}";
-        if (fileName.Contains("llms"))
-            return $"data/pdfs/llms/{fileName}";
+        // Determine the file path based on the document type
         if (fileName.EndsWith(".txt"))
             return $"data/transcripts/{fileName}";
+        if (fileName.EndsWith(".pdf"))
+            return $"data/pdfs/{fileName}";
         
-        return $"data/pdfs/{fileName}";
+        // For web pages and other types
+        return $"data/webpages/{fileName}";
     }
 }
