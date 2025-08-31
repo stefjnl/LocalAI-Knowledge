@@ -62,6 +62,16 @@ public class Program
         builder.Services.AddDbContext<ChatSessionsDbContext>(options => options.UseSqlite("Data Source=localai.db"));
         builder.Services.AddScoped<IChatSessionStore, ChatSessionStore>();
 
+        // Configuration provider
+        builder.Services.AddScoped<LocalAI.Core.Interfaces.IConfigurationProvider, LocalAI.Infrastructure.Services.ConfigurationProvider>();
+
+        // Embedding providers
+        builder.Services.AddScoped<IEmbeddingProvider, OpenRouterEmbeddingProvider>();
+
+        // LLM providers
+        builder.Services.AddScoped<ILlmProvider, LocalLlmProvider>();
+        builder.Services.AddScoped<ILlmProvider, OpenRouterLlmProvider>();
+
         // Your existing services (same as Console app)
         builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
         builder.Services.AddScoped<IVectorSearchService, VectorSearchService>();

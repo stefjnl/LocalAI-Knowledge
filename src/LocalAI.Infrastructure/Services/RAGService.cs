@@ -1,24 +1,23 @@
 ﻿using System.Text;
-using System.Text.Json;
 using LocalAI.Core.Interfaces;
 using LocalAI.Core.Models;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace LocalAI.Infrastructure.Services
 {
     public class RAGService : IRAGService
     {
-        private readonly HttpClient _httpClient;
-        private readonly string _baseUrl;
-        private readonly string _model;
+        private readonly IEnumerable<ILlmProvider> _llmProviders;
+        private readonly IConfigurationProvider _configProvider;
         private readonly ILogger<RAGService> _logger;
 
-        public RAGService(HttpClient httpClient, IConfiguration configuration, ILogger<RAGService> logger)
+        public RAGService(
+            IEnumerable<ILlmProvider> llmProviders,
+            IConfigurationProvider configProvider,
+            ILogger<RAGService> logger)
         {
-            _httpClient = httpClient;
-            _baseUrl = configuration["RAGService:BaseUrl"] ?? "http://localhost:1234";
-            _model = configuration["RAGService:Model"] ?? LocalAI.Core.Models.Constants.DefaultChatModel;
+            _llmProviders = llmProviders;
+            _configProvider = configProvider;
             _logger = logger;
         }
 
@@ -101,89 +100,23 @@ Provide a thorough, well-structured response that addresses the question complet
             // Log the final prompt being sent to the LLM
             _logger.LogInformation("[DEBUG] Final LLM Prompt: {Prompt}", userPrompt);
 
-            // Determine if we're using OpenRouter
-            var isOpenRouter = _baseUrl.Contains("openrouter.ai");
+            // Determine which provider to use based on configuration
+            var providerType = "local"; // Default to local
+            // In a real implementation, this would come from configuration or user selection
+            // For now, we'll use a simple approach to select the provider
 
-            var payload = JsonSerializer.Serialize(new
+            var provider = _llmProviders.FirstOrDefault(p => p.CanHandle(providerType)) ??
+                          _llmProviders.FirstOrDefault();
+
+            if (provider == null)
             {
-                model = _model,
-                messages = new[]
-                {
-            new { role = "system", content = systemPrompt },
-            new { role = "user", content = userPrompt }
-        },
-                stream = false,
-                temperature = 0.1,        // Lower for factual accuracy
-                max_tokens = 2000,        // Higher for comprehensive responses
-                top_p = 0.95,            // Slightly higher for natural language
-                frequency_penalty = 0.0,  // Removed to avoid penalizing technical terms
-                presence_penalty = 0.0,   // Removed to allow thorough coverage
-                                          // Add OpenRouter specific parameters
-                provider = new
-                {
-                    order = new[] { "OpenRouter", "Azure", "LocalAI" }
-                }
-            });
-
-            var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
-
-            try
-            {
-                // Add OpenRouter specific headers if needed
-                if (isOpenRouter)
-                {
-                    // Remove any existing auth header first
-                    _httpClient.DefaultRequestHeaders.Authorization = null;
-                    _httpClient.DefaultRequestHeaders.Remove("Authorization");
-                    _httpClient.DefaultRequestHeaders.Remove("HTTP-Referer");
-                    _httpClient.DefaultRequestHeaders.Remove("X-Title");
-
-                    // Get API key from environment or config
-                    var apiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ??
-                                System.Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ??
-                                "YOUR_API_KEY_HERE"; // This will help us debug if the key isn't set
-
-                    _logger.LogInformation("[DEBUG] Using API Key: {ApiKey}", apiKey.Length > 10 ? apiKey.Substring(0, 5) + "..." + apiKey.Substring(apiKey.Length - 5) : "INVALID");
-
-                    if (!string.IsNullOrEmpty(apiKey) && apiKey != "YOUR_API_KEY_HERE")
-                    {
-                        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-                        _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", "http://localhost:7001");
-                        _httpClient.DefaultRequestHeaders.Add("X-Title", "LocalAI Knowledge Assistant");
-                    }
-                    else
-                    {
-                        _logger.LogError("[ERROR] OpenRouter API key not found in environment variables or configuration");
-                        return "❌ Error: OpenRouter API key not configured. Please check your .env file.";
-                    }
-                }
-
-                // Determine endpoint based on whether we're using OpenRouter
-                var endpoint = isOpenRouter ? $"{_baseUrl}/chat/completions" : $"{_baseUrl}/v1/chat/completions";
-                _logger.LogInformation("[DEBUG] Sending request to endpoint: {Endpoint}", endpoint);
-
-                var response = await _httpClient.PostAsync(endpoint, content);
-                if (response.IsSuccessStatusCode)
-                {
-                    var responseContent = await response.Content.ReadAsStringAsync();
-                    var result = JsonSerializer.Deserialize<JsonElement>(responseContent);
-                    return result.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "No response generated.";
-                }
-                else
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    _logger.LogError("[ERROR] LLM API error: {ErrorContent}", errorContent);
-                    return $"❌ LLM API error: {errorContent}";
-                }
+                _logger.LogError("[ERROR] No LLM provider available");
+                return "❌ Error: No LLM provider configured.";
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[ERROR] Error connecting to LLM");
-                return $"❌ Error connecting to LLM: {ex.Message}";
-            }
+
+            // Combine system and user prompts for providers that expect a single prompt
+            var fullPrompt = $"{systemPrompt}\n\n{userPrompt}";
+            return await provider.GenerateResponseAsync(fullPrompt);
         }
-
     }
 }
-
-

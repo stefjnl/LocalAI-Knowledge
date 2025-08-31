@@ -46,6 +46,16 @@ services.AddSingleton<IConfiguration>(configuration);
 // HTTP Client
 services.AddHttpClient();
 
+// Configuration provider
+services.AddScoped<LocalAI.Core.Interfaces.IConfigurationProvider, LocalAI.Infrastructure.Services.ConfigurationProvider>();
+
+// Embedding providers
+services.AddScoped<IEmbeddingProvider, OpenRouterEmbeddingProvider>();
+
+// LLM providers
+services.AddScoped<ILlmProvider, LocalLlmProvider>();
+services.AddScoped<ILlmProvider, OpenRouterLlmProvider>();
+
 // Application Services
 services.AddScoped<IEmbeddingService, EmbeddingService>();
 services.AddScoped<IVectorSearchService, VectorSearchService>();
