@@ -71,15 +71,49 @@
                             <select class="form-select" id="documentType" @bind="selectedDocumentType">
                                 <option value="transcript">Transcript (.txt)</option>
                                 <option value="pdf">PDF Document (.pdf)</option>
+                                <option value="webpage">Website URL</option>
                             </select>
                         </div>
+                        @if (selectedDocumentType == "webpage")
+                        {
+                            <div class="col-md-6 mb-3">
+                                <label for="urlInput" class="form-label">Website URL</label>
+                                <input type="url" class="form-control" id="urlInput" @bind="selectedUrl"
+                                       placeholder="https://example.com/article" />
+                                <div class="form-text">Enter a complete URL to fetch and process webpage content</div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="col-md-6 mb-3">
+                                <label for="fileUpload" class="form-label">Select File</label>
+                                <InputFile id="fileUpload" class="form-control" accept=".txt,.pdf,.html,.htm" OnChange="OnFileSelected" />
+                            </div>
+                        }
+                    </div>
+                    <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="fileUpload" class="form-label">Select File</label>
-                            <InputFile id="fileUpload" class="form-control" accept=".txt,.pdf" OnChange="OnFileSelected" />
+                            <label for="urlInput" class="form-label">Or Enter URL</label>
+                            <input type="url" class="form-control" id="urlInput" placeholder="https://example.com/article" @bind="inputUrl" />
+                            <div class="form-text">Enter a URL to fetch and process web content</div>
+                        </div>
+                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                            <button type="button" class="btn btn-success" @onclick="FetchUrl"
+                                disabled="@(isUploading || string.IsNullOrWhiteSpace(inputUrl))">
+                                @if (isUploading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Fetching...</span>
+                                }
+                                else
+                                {
+                                    <span>🌐 Fetch & Process URL</span>
+                                }
+                            </button>
                         </div>
                     </div>
                     <button type="button" class="btn btn-success" @onclick="UploadDocument"
-                        disabled="@(isUploading || selectedFile == null)">
+                        disabled="@(isUploading || (selectedDocumentType != "webpage" && selectedFile == null) || (selectedDocumentType == "webpage" && string.IsNullOrWhiteSpace(selectedUrl)))">
                         @if (isUploading)
                         {
                             <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -376,6 +410,8 @@
     private int processedChunks = 0;
     private string selectedDocumentType = "transcript";
     private IBrowserFile? selectedFile;
+    private string selectedUrl = "";
+    private string inputUrl = "";
     private string searchTerm = "";
     
     // Processing details
@@ -395,7 +431,8 @@
         { "pdfs/devops", ("DevOps", "🔧") },
         { "pdfs/dotnet", (".NET", "🔷") },
         { "pdfs/llms", ("LLMs", "🤖") },
-        { "transcripts", ("Transcripts", "📝") }
+        { "transcripts", ("Transcripts", "📝") },
+        { "webpages", ("Web Pages", "🌐") }
     };
 
     // Computed properties
@@ -443,24 +480,31 @@
         {
             // Return all PDFs that are not in subcategories
             return allProcessedDocuments
-                .Where(d => d.DocumentType == "PDF" && 
-                           !d.FileName.Contains("azure") && 
-                           !d.FileName.Contains("devops") && 
-                           !d.FileName.Contains("dotnet") && 
+                .Where(d => d.DocumentType == "PDF" &&
+                           !d.FileName.Contains("azure") &&
+                           !d.FileName.Contains("devops") &&
+                           !d.FileName.Contains("dotnet") &&
                            !d.FileName.Contains("llms"))
                 .ToList();
         }
-        
+
         if (category == "transcripts")
         {
             return allProcessedDocuments
                 .Where(d => d.DocumentType == "Transcript")
                 .ToList();
         }
-        
+
+        if (category == "webpages")
+        {
+            return allProcessedDocuments
+                .Where(d => d.DocumentType == "WebPage")
+                .ToList();
+        }
+
         // Handle subcategories (azure, devops, etc.)
         return allProcessedDocuments
-            .Where(d => d.DocumentType == "PDF" && 
+            .Where(d => d.DocumentType == "PDF" &&
                        d.FileName.Contains(category.Replace("pdfs/", "")))
             .ToList();
     }
@@ -644,51 +688,151 @@
         selectedFile = e.File;
     }
 
-    private async Task UploadDocument()
+    private async Task FetchUrl()
     {
-        Logger.LogInformation("Starting document upload for {0}", selectedFile?.Name);
-        if (selectedFile == null)
-        {
-            Logger.LogWarning("Attempted to upload null file");
-            return;
-        }
-
         isUploading = true;
         statusMessage = "";
         StateHasChanged();
 
         try
         {
-            Logger.LogInformation("Selected file: {0} ({1} bytes)", selectedFile.Name, selectedFile.Size);
+            Logger.LogInformation("Starting URL processing for {0}", inputUrl);
 
-            // Read the file content
-            using var stream = selectedFile.OpenReadStream(10_000_000); // 10MB limit
-            using var memoryStream = new MemoryStream();
-            await stream.CopyToAsync(memoryStream);
-            var fileContent = memoryStream.ToArray();
+            if (string.IsNullOrWhiteSpace(inputUrl))
+            {
+                Logger.LogWarning("Attempted to process empty URL");
+                statusMessage = "Error: Please enter a valid URL";
+                return;
+            }
 
-            // Call the API to upload and process the document
-            var response = await ApiService.UploadDocumentAsync(selectedFile.Name, selectedDocumentType, fileContent);
+            // Validate URL format
+            if (!Uri.TryCreate(inputUrl, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                Logger.LogWarning("Invalid URL format: {0}", inputUrl);
+                statusMessage = "Error: Please enter a valid HTTP or HTTPS URL";
+                return;
+            }
+
+            // Call the API to fetch and process the URL
+            var response = await ApiService.FetchUrlAsync(inputUrl);
 
             if (response.Success && response.Data != null)
             {
                 statusMessage = $"✅ {response.Data.Message}";
-                Logger.LogInformation("Document upload completed successfully. Processed {0} chunks", response.Data.ChunksProcessed);
-                selectedFile = null;
+                Logger.LogInformation("URL processing completed successfully. Processed {0} chunks", response.Data.ChunksProcessed);
+                inputUrl = ""; // Clear the URL input
 
                 // Reload processing data to include the new document
                 await LoadProcessingData();
             }
             else
             {
-                statusMessage = $"Error uploading document: {response.Error}";
-                Logger.LogWarning("Document upload failed: {0}", response.Error);
+                statusMessage = $"Error processing URL: {response.Error}";
+                Logger.LogWarning("URL processing failed: {0}", response.Error);
             }
         }
         catch (Exception ex)
         {
-            statusMessage = $"Error uploading document: {ex.Message}";
-            Logger.LogError(ex, "Error uploading document {0}", selectedFile?.Name);
+            statusMessage = $"Error: {ex.Message}";
+            Logger.LogError(ex, "Error processing URL");
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UploadDocument()
+    {
+        isUploading = true;
+        statusMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            if (selectedDocumentType == "webpage")
+            {
+                // Handle URL processing
+                Logger.LogInformation("Starting URL processing for {0}", selectedUrl);
+
+                if (string.IsNullOrWhiteSpace(selectedUrl))
+                {
+                    Logger.LogWarning("Attempted to process empty URL");
+                    statusMessage = "Error: Please enter a valid URL";
+                    return;
+                }
+
+                // Validate URL format
+                if (!Uri.TryCreate(selectedUrl, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                {
+                    Logger.LogWarning("Invalid URL format: {0}", selectedUrl);
+                    statusMessage = "Error: Please enter a valid HTTP or HTTPS URL";
+                    return;
+                }
+
+                // Call the API to fetch and process the URL
+                var response = await ApiService.FetchUrlAsync(selectedUrl);
+
+                if (response.Success && response.Data != null)
+                {
+                    statusMessage = $"✅ {response.Data.Message}";
+                    Logger.LogInformation("URL processing completed successfully. Processed {0} chunks", response.Data.ChunksProcessed);
+                    selectedUrl = ""; // Clear the URL input
+
+                    // Reload processing data to include the new document
+                    await LoadProcessingData();
+                }
+                else
+                {
+                    statusMessage = $"Error processing URL: {response.Error}";
+                    Logger.LogWarning("URL processing failed: {0}", response.Error);
+                }
+            }
+            else
+            {
+                // Handle file upload
+                Logger.LogInformation("Starting document upload for {0}", selectedFile?.Name);
+                if (selectedFile == null)
+                {
+                    Logger.LogWarning("Attempted to upload null file");
+                    statusMessage = "Error: Please select a file to upload";
+                    return;
+                }
+
+                Logger.LogInformation("Selected file: {0} ({1} bytes)", selectedFile.Name, selectedFile.Size);
+
+                // Read the file content
+                using var stream = selectedFile.OpenReadStream(10_000_000); // 10MB limit
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                var fileContent = memoryStream.ToArray();
+
+                // Call the API to upload and process the document
+                var response = await ApiService.UploadDocumentAsync(selectedFile.Name, selectedDocumentType, fileContent);
+
+                if (response.Success && response.Data != null)
+                {
+                    statusMessage = $"✅ {response.Data.Message}";
+                    Logger.LogInformation("Document upload completed successfully. Processed {0} chunks", response.Data.ChunksProcessed);
+                    selectedFile = null;
+
+                    // Reload processing data to include the new document
+                    await LoadProcessingData();
+                }
+                else
+                {
+                    statusMessage = $"Error uploading document: {response.Error}";
+                    Logger.LogWarning("Document upload failed: {0}", response.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+            Logger.LogError(ex, "Error processing document/URL");
         }
         finally
         {

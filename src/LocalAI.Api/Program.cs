@@ -413,6 +413,138 @@ public class Program
             }
         });
 
+        app.MapPost("/api/documents/fetch-url", async (HttpRequest request, IDocumentProcessor processor, IVectorSearchService vectorSearch, IHttpClientFactory httpClientFactory) =>
+        {
+            try
+            {
+                // Parse JSON request body
+                using var reader = new StreamReader(request.Body);
+                var json = await reader.ReadToEndAsync();
+                var urlRequest = JsonSerializer.Deserialize<UrlFetchRequest>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (urlRequest == null || string.IsNullOrWhiteSpace(urlRequest.Url))
+                {
+                    return Results.BadRequest("URL is required.");
+                }
+
+                // Validate URL format
+                if (!Uri.TryCreate(urlRequest.Url, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                {
+                    return Results.BadRequest("Invalid URL format. Must be a valid HTTP or HTTPS URL.");
+                }
+
+                // Time the entire process
+                var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+                // Fetch web content
+                var httpClient = httpClientFactory.CreateClient();
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("LocalAI-Knowledge/1.0 (Web Content Processor)");
+                httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+                Console.WriteLine($"Fetching content from: {urlRequest.Url}");
+
+                var fetchStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var response = await httpClient.GetAsync(urlRequest.Url);
+                fetchStopwatch.Stop();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return Results.BadRequest($"Failed to fetch URL: {response.StatusCode} - {response.ReasonPhrase}");
+                }
+
+                var contentType = response.Content.Headers.ContentType?.MediaType;
+                if (contentType != null && !contentType.Contains("text/html") && !contentType.Contains("text/plain"))
+                {
+                    return Results.BadRequest($"Unsupported content type: {contentType}. Only HTML and plain text content is supported.");
+                }
+
+                var htmlContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Fetched {htmlContent.Length} characters in {fetchStopwatch.ElapsedMilliseconds}ms");
+
+                // Extract text from HTML
+                var textContent = WebContentHelper.ExtractTextFromHtml(htmlContent, urlRequest.Url);
+                if (string.IsNullOrWhiteSpace(textContent))
+                {
+                    return Results.BadRequest("No readable text content found on the webpage.");
+                }
+
+                Console.WriteLine($"Extracted {textContent.Length} characters of text content");
+
+                // Save as temporary HTML file for processing
+                var urlTitle = WebContentHelper.ExtractTitleFromHtml(htmlContent) ?? "webpage";
+                var safeFileName = $"{WebContentHelper.SanitizeFileName(urlTitle)}_{Guid.NewGuid()}.html";
+                var webPagesPath = Path.Combine("data", "webpages");
+                Directory.CreateDirectory(webPagesPath);
+                var tempFilePath = Path.Combine(webPagesPath, safeFileName);
+
+                await File.WriteAllTextAsync(tempFilePath, htmlContent);
+
+                // Process the content
+                var processStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var chunks = await processor.ProcessWebPageFileAsync(tempFilePath);
+                processStopwatch.Stop();
+
+                totalStopwatch.Stop();
+
+                if (chunks.Count > 0)
+                {
+                    await vectorSearch.StoreDocumentsAsync(chunks);
+
+                    // Create processing metadata for tracking
+                    var metadata = new ProcessingMetadata
+                    {
+                        FileName = safeFileName,
+                        DocumentType = "WebPage",
+                        ChunksProcessed = chunks.Count,
+                        ProcessingDurationMs = totalStopwatch.ElapsedMilliseconds,
+                        ProcessedAt = DateTime.UtcNow,
+                        Success = true
+                    };
+
+                    // Save the metadata (cast to access enhanced methods)
+                    ((DocumentProcessor)processor).SaveFileMetadata(metadata);
+
+                    // Clean up temporary file
+                    try { File.Delete(tempFilePath); } catch { /* Ignore cleanup errors */ }
+
+                    return Results.Ok(new
+                    {
+                        Success = true,
+                        ChunksProcessed = chunks.Count,
+                        ProcessingDuration = metadata.FormattedDuration,
+                        Url = urlRequest.Url,
+                        Title = urlTitle,
+                        Message = $"Successfully processed webpage '{urlTitle}' ({chunks.Count} chunks in {metadata.FormattedDuration})"
+                    });
+                }
+
+                // Clean up temporary file
+                try { File.Delete(tempFilePath); } catch { /* Ignore cleanup errors */ }
+
+                return Results.Ok(new
+                {
+                    Success = false,
+                    ChunksProcessed = 0,
+                    ProcessingDuration = totalStopwatch.ElapsedMilliseconds < 1000 ? $"{totalStopwatch.ElapsedMilliseconds}ms" : $"{totalStopwatch.ElapsedMilliseconds / 1000.0:F1}s",
+                    Url = urlRequest.Url,
+                    Message = $"No processable content found on '{urlRequest.Url}'"
+                });
+            }
+            catch (HttpRequestException ex)
+            {
+                return Results.BadRequest($"Network error fetching URL: {ex.Message}");
+            }
+            catch (TaskCanceledException)
+            {
+                return Results.BadRequest("Request timed out. The webpage may be too slow to respond.");
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error processing webpage: {ex.Message}");
+            }
+        });
+
         app.MapPost("/api/search", async (SearchRequest request, IVectorSearchService vectorSearch, IRAGService ragService, ILogger<Program> logger) =>
         {
             try
@@ -979,3 +1111,141 @@ public record CreateConversationRequest(string Title = "New Chat");
 public record AddMessageRequest(string Role, string Content);
 
 public record CodeRequest(string Query, List<LocalAI.Core.Models.ConversationExchange>? Context = null);
+
+// URL Fetching DTOs and helper methods
+public record UrlFetchRequest(string Url);
+
+// Static helper class for web content processing
+public static class WebContentHelper
+{
+    public static string ExtractTextFromHtml(string htmlContent, string url)
+    {
+        try
+        {
+            var htmlDoc = new HtmlAgilityPack.HtmlDocument();
+            htmlDoc.LoadHtml(htmlContent);
+
+            // Remove script and style elements
+            var nodesToRemove = htmlDoc.DocumentNode.Descendants()
+                .Where(n => n.Name == "script" || n.Name == "style" || n.Name == "noscript")
+                .ToList();
+
+            foreach (var node in nodesToRemove)
+            {
+                node.Remove();
+            }
+
+            // Extract text from main content areas first
+            var mainContent = htmlDoc.DocumentNode.SelectSingleNode("//main");
+            if (mainContent == null)
+            {
+                mainContent = htmlDoc.DocumentNode.SelectSingleNode("//article");
+            }
+            if (mainContent == null)
+            {
+                mainContent = htmlDoc.DocumentNode.SelectSingleNode("//div[@class='content']");
+            }
+            if (mainContent == null)
+            {
+                mainContent = htmlDoc.DocumentNode.SelectSingleNode("//div[@id='content']");
+            }
+            if (mainContent == null)
+            {
+                // Fallback to body
+                mainContent = htmlDoc.DocumentNode.SelectSingleNode("//body");
+            }
+
+            string textContent;
+            if (mainContent != null)
+            {
+                textContent = mainContent.InnerText;
+            }
+            else
+            {
+                textContent = htmlDoc.DocumentNode.InnerText;
+            }
+
+            // Clean up whitespace and normalize
+            textContent = System.Text.RegularExpressions.Regex.Replace(textContent, @"\s+", " ");
+            textContent = textContent.Trim();
+
+            // Add URL as prefix for context
+            var uri = new Uri(url);
+            var domain = uri.Host;
+            return $"[Source: {domain}]\n\n{textContent}";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error extracting text from HTML: {ex.Message}");
+            return string.Empty;
+        }
+    }
+
+    public static string? ExtractTitleFromHtml(string htmlContent)
+    {
+        try
+        {
+            var htmlDoc = new HtmlAgilityPack.HtmlDocument();
+            htmlDoc.LoadHtml(htmlContent);
+
+            // Try title tag first
+            var titleNode = htmlDoc.DocumentNode.SelectSingleNode("//title");
+            if (titleNode != null && !string.IsNullOrWhiteSpace(titleNode.InnerText))
+            {
+                return titleNode.InnerText.Trim();
+            }
+
+            // Try h1 tag
+            var h1Node = htmlDoc.DocumentNode.SelectSingleNode("//h1");
+            if (h1Node != null && !string.IsNullOrWhiteSpace(h1Node.InnerText))
+            {
+                return h1Node.InnerText.Trim();
+            }
+
+            // Try og:title meta tag
+            var ogTitleNode = htmlDoc.DocumentNode.SelectSingleNode("//meta[@property='og:title']");
+            if (ogTitleNode != null)
+            {
+                var ogTitle = ogTitleNode.GetAttributeValue("content", "");
+                if (!string.IsNullOrWhiteSpace(ogTitle))
+                {
+                    return ogTitle.Trim();
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error extracting title from HTML: {ex.Message}");
+            return null;
+        }
+    }
+
+    public static string SanitizeFileName(string fileName)
+    {
+        // Remove invalid file name characters
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+
+        // Remove multiple consecutive underscores
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, @"_+", "_");
+
+        // Trim underscores from start and end
+        sanitized = sanitized.Trim('_');
+
+        // Limit length to prevent filesystem issues
+        if (sanitized.Length > 100)
+        {
+            sanitized = sanitized.Substring(0, 100);
+        }
+
+        // Ensure it's not empty
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            sanitized = "webpage";
+        }
+
+        return sanitized;
+    }
+}
