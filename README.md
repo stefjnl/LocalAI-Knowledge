@@ -243,7 +243,7 @@ var response = await ragService.GenerateResponseAsync(query, context);
   },
   "RAGService": {
     "BaseUrl": "http://localhost:1234", 
-    "Model": "qwen/qwen3-coder-30b"
+    "Model": "qwen2.5-coder-14b-instruct"
   },
   "Qdrant": {
     "BaseUrl": "http://localhost:6333",
@@ -300,7 +300,7 @@ If you prefer to use local models instead of OpenRouter:
    {
      "RAGService": {
        "BaseUrl": "http://localhost:1234",
-       "Model": "qwen/qwen3-coder-30b"
+       "Model": "qwen2.5-coder-14b-instruct"
      },
      "OpenRouter": {
        "UseOpenRouter": false
