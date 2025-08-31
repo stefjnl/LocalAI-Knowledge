@@ -1181,6 +1181,10 @@ namespace LocalAI.Infrastructure.Services
             return chunks;
         }
 
+
+
+
+
         public async Task<List<DocumentChunk>> ProcessEpubFileAsync(string filePath)
         {
             var fileName = Path.GetFileName(filePath);
@@ -1209,6 +1213,85 @@ namespace LocalAI.Infrastructure.Services
             _logger?.LogInformation("Completed EPUB processing for file: {FileName}. Total chunks: {ChunkCount}", fileName, chunks.Count);
 
             return chunks;
+        }
+
+        public async Task<List<DocumentChunk>> ProcessUrlAsync(string url)
+        {
+            _logger?.LogInformation("Starting URL processing for: {Url}", url);
+
+            try
+            {
+                // Fetch web content
+                using var httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("LocalAI-Knowledge/1.0 (Web Content Processor)");
+                httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+                var response = await httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new Exception($"Failed to fetch URL: {response.StatusCode} - {response.ReasonPhrase}");
+                }
+
+                var contentType = response.Content.Headers.ContentType?.MediaType;
+                if (contentType != null && !contentType.Contains("text/html") && !contentType.Contains("text/plain"))
+                {
+                    throw new Exception($"Unsupported content type: {contentType}. Only HTML and plain text content is supported.");
+                }
+
+                var htmlContent = await response.Content.ReadAsStringAsync();
+                _logger?.LogInformation("Fetched {ContentLength} characters from URL", htmlContent.Length);
+
+                // Extract text from HTML
+                var textContent = ExtractTextFromHtmlContent(htmlContent, url);
+                if (string.IsNullOrWhiteSpace(textContent))
+                {
+                    _logger?.LogWarning("No readable text content found on webpage: {Url}", url);
+                    return new List<DocumentChunk>();
+                }
+
+                _logger?.LogInformation("Extracted {TextLength} characters of text content", textContent.Length);
+
+                // Split into chunks and process
+                var textChunks = SplitIntoChunks(textContent, 600, 50);
+                var chunks = new List<DocumentChunk>();
+
+                _logger?.LogInformation("Processing {ChunkCount} chunks from URL: {Url}", textChunks.Count, url);
+
+                foreach (var chunk in textChunks)
+                {
+                    var embedding = await _embeddingService.GenerateEmbeddingAsync(chunk);
+                    var uri = new Uri(url);
+                    var source = $"{uri.Host}_{Guid.NewGuid()}";
+
+                    chunks.Add(new DocumentChunk
+                    {
+                        Text = chunk,
+                        Embedding = embedding,
+                        Source = source,
+                        Metadata = $"webpage|{url}"
+                    });
+                }
+
+                _logger?.LogInformation("Completed URL processing for {Url}. Total chunks: {ChunkCount}", url, chunks.Count);
+
+                return chunks;
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger?.LogError(ex, "Network error fetching URL: {Url}", url);
+                throw new Exception($"Network error fetching URL: {ex.Message}");
+            }
+            catch (TaskCanceledException)
+            {
+                _logger?.LogError("Request timed out for URL: {Url}", url);
+                throw new Exception("Request timed out. The webpage may be too slow to respond.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error processing URL: {Url}", url);
+                throw;
+            }
         }
 
         // All existing private methods remain unchanged...
@@ -1475,6 +1558,65 @@ namespace LocalAI.Infrastructure.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"Web page processing failed for {filePath}: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        private static string ExtractTextFromHtmlContent(string htmlContent, string url)
+        {
+            try
+            {
+                var htmlDoc = new HtmlDocument();
+                htmlDoc.LoadHtml(htmlContent);
+
+                // Remove script and style elements
+                htmlDoc.DocumentNode.Descendants()
+                    .Where(n => n.Name == "script" || n.Name == "style" || n.Name == "noscript")
+                    .ToList()
+                    .ForEach(n => n.Remove());
+
+                // Try to extract from main content areas first
+                var mainContent = htmlDoc.DocumentNode.SelectSingleNode("//main");
+                if (mainContent == null)
+                {
+                    mainContent = htmlDoc.DocumentNode.SelectSingleNode("//article");
+                }
+                if (mainContent == null)
+                {
+                    mainContent = htmlDoc.DocumentNode.SelectSingleNode("//div[@class='content']");
+                }
+                if (mainContent == null)
+                {
+                    mainContent = htmlDoc.DocumentNode.SelectSingleNode("//div[@id='content']");
+                }
+                if (mainContent == null)
+                {
+                    // Fallback to body
+                    mainContent = htmlDoc.DocumentNode.SelectSingleNode("//body");
+                }
+
+                string textContent;
+                if (mainContent != null)
+                {
+                    textContent = mainContent.InnerText;
+                }
+                else
+                {
+                    textContent = htmlDoc.DocumentNode.InnerText;
+                }
+
+                // Clean up whitespace and normalize
+                textContent = System.Text.RegularExpressions.Regex.Replace(textContent, @"\s+", " ");
+                textContent = textContent.Trim();
+
+                // Add URL as prefix for context
+                var uri = new Uri(url);
+                var domain = uri.Host;
+                return $"[Source: {domain}]\n\n{textContent}";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error extracting text from HTML content: {ex.Message}");
                 return string.Empty;
             }
         }

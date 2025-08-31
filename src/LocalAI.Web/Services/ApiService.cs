@@ -12,6 +12,7 @@ public interface IApiService
     Task<ApiResponse<bool>> DeleteDocumentAsync(string documentName);
     Task<ApiResponse<CollectionStatusResponse>> GetCollectionStatusAsync();
     Task<ApiResponse<UploadDocumentResponse>> UploadDocumentAsync(string fileName, string fileType, byte[] fileContent);
+    Task<ApiResponse<UploadDocumentResponse>> FetchUrlAsync(string url);
     Task<ApiResponse<ProcessedDocumentsResponse>> GetProcessedDocumentsAsync();
     Task<ApiResponse<LastRunResponse>> GetLastRunAsync();
     Task<ApiResponse<ProcessingSummaryResponse>> GetProcessingSummaryAsync();
@@ -189,6 +190,29 @@ public class ApiService : IApiService
             content.Add(new StringContent(fileType), "documentType");
 
             var response = await _httpClient.PostAsync("/api/documents/upload", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<UploadDocumentResponse>(responseContent, _jsonOptions);
+                return new ApiResponse<UploadDocumentResponse> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<UploadDocumentResponse> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<UploadDocumentResponse> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<UploadDocumentResponse>> FetchUrlAsync(string url)
+    {
+        try
+        {
+            var request = new { Url = url };
+            var response = await _httpClient.PostAsJsonAsync("/api/documents/fetch-url", request);
 
             if (response.IsSuccessStatusCode)
             {
