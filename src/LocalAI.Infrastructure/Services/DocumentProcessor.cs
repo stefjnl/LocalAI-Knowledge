@@ -7,6 +7,9 @@ using System.Text.Json;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
+using Tesseract;
+using HtmlAgilityPack;
+using MimeKit;
 
 namespace LocalAI.Infrastructure.Services
 {
@@ -16,6 +19,11 @@ namespace LocalAI.Infrastructure.Services
         private readonly ILogger<DocumentProcessor>? _logger;
         private readonly string _transcriptsPath;
         private readonly string _pdfsPath;
+        private readonly string _markdownPath;
+        private readonly string _imagesPath;
+        private readonly string _emailsPath;
+        private readonly string _webPagesPath;
+        private readonly string _epubPath;
         private readonly string _processedFilesPath;
         private readonly string _processingMetadataPath;
 
@@ -25,6 +33,13 @@ namespace LocalAI.Infrastructure.Services
             _logger = logger;
             _transcriptsPath = configuration["DocumentPaths:Transcripts"] ?? "data/transcripts/";
             _pdfsPath = configuration["DocumentPaths:PDFs"] ?? "data/pdfs/";
+
+            // New document type paths
+            _markdownPath = configuration["DocumentPaths:Markdown"] ?? "data/markdown/";
+            _imagesPath = configuration["DocumentPaths:Images"] ?? "data/images/";
+            _emailsPath = configuration["DocumentPaths:Emails"] ?? "data/emails/";
+            _webPagesPath = configuration["DocumentPaths:WebPages"] ?? "data/webpages/";
+            _epubPath = configuration["DocumentPaths:EPUB"] ?? "data/epub/";
 
             // Try to use persistent data directory, fallback to /tmp for Docker compatibility
             var metadataPath = configuration["DocumentPaths:Metadata"]
@@ -151,6 +166,294 @@ namespace LocalAI.Infrastructure.Services
                 }
             }
 
+            // Process Markdown files
+            if (Directory.Exists(_markdownPath))
+            {
+                var markdownFiles = Directory.GetFiles(_markdownPath, "*.md", SearchOption.AllDirectories);
+                foreach (var file in markdownFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed Markdown: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessMarkdownFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Markdown",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing Markdown {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Markdown",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
+            // Process images
+            if (Directory.Exists(_imagesPath))
+            {
+                var imageFiles = Directory.GetFiles(_imagesPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => new[] { ".png", ".jpg", ".jpeg", ".bmp", ".tiff" }.Contains(Path.GetExtension(f).ToLower()));
+                foreach (var file in imageFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed image: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessImageFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Image",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing image {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Image",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
+            // Process emails
+            if (Directory.Exists(_emailsPath))
+            {
+                var emailFiles = Directory.GetFiles(_emailsPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => new[] { ".eml", ".msg" }.Contains(Path.GetExtension(f).ToLower()));
+                foreach (var file in emailFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed email: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessEmailFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Email",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing email {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Email",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
+            // Process web pages
+            if (Directory.Exists(_webPagesPath))
+            {
+                var webPageFiles = Directory.GetFiles(_webPagesPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => new[] { ".html", ".htm", ".mhtml" }.Contains(Path.GetExtension(f).ToLower()));
+                foreach (var file in webPageFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed web page: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessWebPageFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "WebPage",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing web page {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "WebPage",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
+            // Process EPUB files
+            if (Directory.Exists(_epubPath))
+            {
+                var epubFiles = Directory.GetFiles(_epubPath, "*.epub", SearchOption.AllDirectories);
+                foreach (var file in epubFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed EPUB: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessEpubFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "EPUB",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing EPUB {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "EPUB",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
             stopwatch.Stop();
             SaveProcessedFiles(processedFiles);
             SaveLastRunMetadata(currentRunMetadata, stopwatch.ElapsedMilliseconds);
@@ -258,6 +561,294 @@ namespace LocalAI.Infrastructure.Services
                 }
             }
 
+            // Process only new Markdown files
+            if (Directory.Exists(_markdownPath))
+            {
+                var markdownFiles = Directory.GetFiles(_markdownPath, "*.md", SearchOption.AllDirectories);
+                foreach (var file in markdownFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed Markdown: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessMarkdownFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Markdown",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing Markdown {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Markdown",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
+            // Process only new images
+            if (Directory.Exists(_imagesPath))
+            {
+                var imageFiles = Directory.GetFiles(_imagesPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => new[] { ".png", ".jpg", ".jpeg", ".bmp", ".tiff" }.Contains(Path.GetExtension(f).ToLower()));
+                foreach (var file in imageFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed image: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessImageFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Image",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing image {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Image",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
+            // Process only new emails
+            if (Directory.Exists(_emailsPath))
+            {
+                var emailFiles = Directory.GetFiles(_emailsPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => new[] { ".eml", ".msg" }.Contains(Path.GetExtension(f).ToLower()));
+                foreach (var file in emailFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed email: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessEmailFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Email",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing email {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "Email",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
+            // Process only new web pages
+            if (Directory.Exists(_webPagesPath))
+            {
+                var webPageFiles = Directory.GetFiles(_webPagesPath, "*.*", SearchOption.AllDirectories)
+                    .Where(f => new[] { ".html", ".htm", ".mhtml" }.Contains(Path.GetExtension(f).ToLower()));
+                foreach (var file in webPageFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed web page: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessWebPageFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "WebPage",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing web page {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "WebPage",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
+            // Process only new EPUB files
+            if (Directory.Exists(_epubPath))
+            {
+                var epubFiles = Directory.GetFiles(_epubPath, "*.epub", SearchOption.AllDirectories);
+                foreach (var file in epubFiles)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (processedFiles.Contains(fileName))
+                    {
+                        Console.WriteLine($"Skipping already processed EPUB: {fileName}");
+                        continue;
+                    }
+
+                    var fileStopwatch = Stopwatch.StartNew();
+                    try
+                    {
+                        var chunks = await ProcessEpubFileAsync(file);
+                        fileStopwatch.Stop();
+
+                        allChunks.AddRange(chunks);
+                        processedFiles.Add(fileName);
+
+                        // Track metadata for this file
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "EPUB",
+                            ChunksProcessed = chunks.Count,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = true
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        fileStopwatch.Stop();
+                        Console.WriteLine($"Error processing EPUB {file}: {ex.Message}");
+
+                        // Track failed processing
+                        var metadata = new ProcessingMetadata
+                        {
+                            FileName = fileName,
+                            DocumentType = "EPUB",
+                            ChunksProcessed = 0,
+                            ProcessingDurationMs = fileStopwatch.ElapsedMilliseconds,
+                            ProcessedAt = DateTime.UtcNow,
+                            Success = false,
+                            ErrorMessage = ex.Message
+                        };
+                        currentRunMetadata.Add(metadata);
+                        SaveFileMetadata(metadata);
+                    }
+                }
+            }
+
             stopwatch.Stop();
             SaveProcessedFiles(processedFiles);
             SaveLastRunMetadata(currentRunMetadata, stopwatch.ElapsedMilliseconds);
@@ -316,12 +907,12 @@ namespace LocalAI.Infrastructure.Services
         public void DeleteFileMetadata(string fileName)
         {
             var allMetadata = LoadAllProcessingMetadata();
-            
+
             // Remove entry for this file
             allMetadata.RemoveAll(m => m.FileName == fileName);
-            
+
             SaveAllProcessingMetadata(allMetadata);
-            
+
             // Also remove from processed files list
             var processedFiles = LoadProcessedFiles();
             processedFiles.Remove(fileName);
@@ -428,17 +1019,17 @@ namespace LocalAI.Infrastructure.Services
         {
             var fileName = Path.GetFileName(filePath);
             _logger?.LogInformation("Starting PDF processing for file: {FileName}", fileName);
-            
+
             var pdfContent = ExtractTextFromPdf(filePath);
             var textChunks = SplitIntoChunks(pdfContent.text, 600, 50);
             var chunks = new List<DocumentChunk>();
-            
+
             _logger?.LogInformation("Extracted {ChunkCount} chunks from PDF: {FileName}", textChunks.Count, fileName);
 
             foreach (var (chunk, index) in textChunks.Select((c, i) => (c, i)))
             {
                 _logger?.LogDebug("Processing chunk {ChunkIndex}/{TotalChunks} for file: {FileName}", index + 1, textChunks.Count, fileName);
-                
+
                 var embedding = await _embeddingService.GenerateEmbeddingAsync(chunk);
                 var source = Path.GetFileNameWithoutExtension(filePath);
                 var pageInfo = GetChunkPageInfo(pdfContent.pageBreaks, index, textChunks.Count, chunk, pdfContent.text);
@@ -450,15 +1041,172 @@ namespace LocalAI.Infrastructure.Services
                     Source = source,
                     Metadata = $"pdf|{pageInfo}"
                 });
-                
+
                 // Log progress every 100 chunks
                 if ((index + 1) % 100 == 0)
                 {
                     _logger?.LogInformation("Processed {ChunkCount} chunks for file: {FileName}", index + 1, fileName);
                 }
             }
-            
+
             _logger?.LogInformation("Completed PDF processing for file: {FileName}. Total chunks: {ChunkCount}", fileName, chunks.Count);
+
+            return chunks;
+        }
+
+        public async Task<List<DocumentChunk>> ProcessMarkdownFileAsync(string filePath)
+        {
+            var fileName = Path.GetFileName(filePath);
+            _logger?.LogInformation("Starting Markdown processing for file: {FileName}", fileName);
+
+            var content = await File.ReadAllTextAsync(filePath);
+            var processedContent = ProcessMarkdownContent(content);
+            var textChunks = SplitIntoChunks(processedContent, 600, 50);
+            var chunks = new List<DocumentChunk>();
+
+            _logger?.LogInformation("Extracted {ChunkCount} chunks from Markdown: {FileName}", textChunks.Count, fileName);
+
+            foreach (var chunk in textChunks)
+            {
+                var embedding = await _embeddingService.GenerateEmbeddingAsync(chunk);
+                var source = Path.GetFileNameWithoutExtension(filePath);
+
+                chunks.Add(new DocumentChunk
+                {
+                    Text = chunk,
+                    Embedding = embedding,
+                    Source = source,
+                    Metadata = "markdown"
+                });
+            }
+
+            _logger?.LogInformation("Completed Markdown processing for file: {FileName}. Total chunks: {ChunkCount}", fileName, chunks.Count);
+
+            return chunks;
+        }
+
+        public async Task<List<DocumentChunk>> ProcessImageFileAsync(string filePath)
+        {
+            var fileName = Path.GetFileName(filePath);
+            _logger?.LogInformation("Starting image processing with OCR for file: {FileName}", fileName);
+
+            var extractedText = ExtractTextFromImage(filePath);
+            if (string.IsNullOrWhiteSpace(extractedText))
+            {
+                _logger?.LogWarning("No text extracted from image: {FileName}", fileName);
+                return new List<DocumentChunk>();
+            }
+
+            var textChunks = SplitIntoChunks(extractedText, 600, 50);
+            var chunks = new List<DocumentChunk>();
+
+            _logger?.LogInformation("Extracted {ChunkCount} chunks from image: {FileName}", textChunks.Count, fileName);
+
+            foreach (var chunk in textChunks)
+            {
+                var embedding = await _embeddingService.GenerateEmbeddingAsync(chunk);
+                var source = Path.GetFileNameWithoutExtension(filePath);
+
+                chunks.Add(new DocumentChunk
+                {
+                    Text = chunk,
+                    Embedding = embedding,
+                    Source = source,
+                    Metadata = "image|ocr"
+                });
+            }
+
+            _logger?.LogInformation("Completed image processing for file: {FileName}. Total chunks: {ChunkCount}", fileName, chunks.Count);
+
+            return chunks;
+        }
+
+        public async Task<List<DocumentChunk>> ProcessEmailFileAsync(string filePath)
+        {
+            var fileName = Path.GetFileName(filePath);
+            _logger?.LogInformation("Starting email processing for file: {FileName}", fileName);
+
+            var emailContent = ExtractTextFromEmail(filePath);
+            var textChunks = SplitIntoChunks(emailContent, 600, 50);
+            var chunks = new List<DocumentChunk>();
+
+            _logger?.LogInformation("Extracted {ChunkCount} chunks from email: {FileName}", textChunks.Count, fileName);
+
+            foreach (var chunk in textChunks)
+            {
+                var embedding = await _embeddingService.GenerateEmbeddingAsync(chunk);
+                var source = Path.GetFileNameWithoutExtension(filePath);
+
+                chunks.Add(new DocumentChunk
+                {
+                    Text = chunk,
+                    Embedding = embedding,
+                    Source = source,
+                    Metadata = "email"
+                });
+            }
+
+            _logger?.LogInformation("Completed email processing for file: {FileName}. Total chunks: {ChunkCount}", fileName, chunks.Count);
+
+            return chunks;
+        }
+
+        public async Task<List<DocumentChunk>> ProcessWebPageFileAsync(string filePath)
+        {
+            var fileName = Path.GetFileName(filePath);
+            _logger?.LogInformation("Starting web page processing for file: {FileName}", fileName);
+
+            var webContent = ExtractTextFromWebPage(filePath);
+            var textChunks = SplitIntoChunks(webContent, 600, 50);
+            var chunks = new List<DocumentChunk>();
+
+            _logger?.LogInformation("Extracted {ChunkCount} chunks from web page: {FileName}", textChunks.Count, fileName);
+
+            foreach (var chunk in textChunks)
+            {
+                var embedding = await _embeddingService.GenerateEmbeddingAsync(chunk);
+                var source = Path.GetFileNameWithoutExtension(filePath);
+
+                chunks.Add(new DocumentChunk
+                {
+                    Text = chunk,
+                    Embedding = embedding,
+                    Source = source,
+                    Metadata = "webpage"
+                });
+            }
+
+            _logger?.LogInformation("Completed web page processing for file: {FileName}. Total chunks: {ChunkCount}", fileName, chunks.Count);
+
+            return chunks;
+        }
+
+        public async Task<List<DocumentChunk>> ProcessEpubFileAsync(string filePath)
+        {
+            var fileName = Path.GetFileName(filePath);
+            _logger?.LogInformation("Starting EPUB processing for file: {FileName}", fileName);
+
+            var epubContent = ExtractTextFromEpub(filePath);
+            var textChunks = SplitIntoChunks(epubContent, 600, 50);
+            var chunks = new List<DocumentChunk>();
+
+            _logger?.LogInformation("Extracted {ChunkCount} chunks from EPUB: {FileName}", textChunks.Count, fileName);
+
+            foreach (var chunk in textChunks)
+            {
+                var embedding = await _embeddingService.GenerateEmbeddingAsync(chunk);
+                var source = Path.GetFileNameWithoutExtension(filePath);
+
+                chunks.Add(new DocumentChunk
+                {
+                    Text = chunk,
+                    Embedding = embedding,
+                    Source = source,
+                    Metadata = "epub"
+                });
+            }
+
+            _logger?.LogInformation("Completed EPUB processing for file: {FileName}. Total chunks: {ChunkCount}", fileName, chunks.Count);
 
             return chunks;
         }
@@ -630,6 +1378,113 @@ namespace LocalAI.Infrastructure.Services
             }
 
             return parts;
+        }
+
+        // Helper methods for new document types
+        private static string ProcessMarkdownContent(string content)
+        {
+            // Simple markdown processing - preserve headings and structure
+            // For more advanced processing, could use a markdown parser
+            return content
+                .Replace("\r\n", "\n")
+                .Replace("\r", "\n")
+                .Trim();
+        }
+
+        private static string ExtractTextFromImage(string filePath)
+        {
+            try
+            {
+                using (var engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default))
+                {
+                    using (var img = Pix.LoadFromFile(filePath))
+                    {
+                        using (var page = engine.Process(img))
+                        {
+                            return page.GetText();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"OCR processing failed for {filePath}: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        private static string ExtractTextFromEmail(string filePath)
+        {
+            try
+            {
+                var message = MimeMessage.Load(filePath);
+
+                var content = new System.Text.StringBuilder();
+
+                // Add email headers
+                content.AppendLine($"From: {message.From}");
+                content.AppendLine($"To: {message.To}");
+                content.AppendLine($"Subject: {message.Subject}");
+                content.AppendLine($"Date: {message.Date}");
+                content.AppendLine();
+
+                // Add body content
+                if (message.TextBody != null)
+                {
+                    content.AppendLine(message.TextBody);
+                }
+
+                if (message.HtmlBody != null)
+                {
+                    // Simple HTML to text conversion
+                    var htmlDoc = new HtmlDocument();
+                    htmlDoc.LoadHtml(message.HtmlBody);
+                    var text = htmlDoc.DocumentNode.InnerText;
+                    content.AppendLine(text);
+                }
+
+                return content.ToString();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Email processing failed for {filePath}: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        private static string ExtractTextFromWebPage(string filePath)
+        {
+            try
+            {
+                var htmlContent = File.ReadAllText(filePath);
+                var htmlDoc = new HtmlDocument();
+                htmlDoc.LoadHtml(htmlContent);
+
+                // Remove script and style elements
+                htmlDoc.DocumentNode.Descendants()
+                    .Where(n => n.Name == "script" || n.Name == "style")
+                    .ToList()
+                    .ForEach(n => n.Remove());
+
+                // Extract text content
+                var text = htmlDoc.DocumentNode.InnerText;
+
+                // Clean up whitespace
+                return System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Web page processing failed for {filePath}: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        private static string ExtractTextFromEpub(string filePath)
+        {
+            // TODO: Implement EPUB processing when package is available
+            // For now, return empty string
+            Console.WriteLine($"EPUB processing not yet implemented for {filePath}");
+            return string.Empty;
         }
     }
 }

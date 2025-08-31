@@ -15,18 +15,20 @@ public interface IApiService
     Task<ApiResponse<ProcessedDocumentsResponse>> GetProcessedDocumentsAsync();
     Task<ApiResponse<LastRunResponse>> GetLastRunAsync();
     Task<ApiResponse<ProcessingSummaryResponse>> GetProcessingSummaryAsync();
-    
+
     // Debug API methods
     Task<ApiResponse<CollectionStatsResponse>> GetCollectionStatsAsync();
     Task<ApiResponse<RawSearchResponse>> PerformRawSearchAsync(string query);
     Task<ApiResponse<DocumentChunksResponse>> GetDocumentChunksAsync(string filename);
-    
+
     // Conversation API methods
     Task<ApiResponse<List<ChatConversationSummary>>> GetConversationsAsync();
     Task<ApiResponse<ChatConversation>> GetConversationAsync(Guid id);
     Task<ApiResponse<ChatConversation>> CreateConversationAsync(string title = "New Chat");
     Task<ApiResponse<bool>> DeleteConversationAsync(Guid id);
     Task<ApiResponse<ConversationMessage>> AddMessageToConversationAsync(Guid conversationId, string role, string content);
+    Task<ApiResponse<ConversationExport>> ExportConversationAsync(Guid conversationId, string format = "json");
+    Task<ApiResponse<ConversationImportResult>> ImportConversationAsync(string importData, string format = "json");
     Task<ApiResponse<CodeResponse>> CodeSearchAsync(string query, List<ConversationExchange>? context = null);
 }
 
@@ -450,6 +452,51 @@ public class ApiService : IApiService
         }
     }
 
+    public async Task<ApiResponse<ConversationExport>> ExportConversationAsync(Guid conversationId, string format = "json")
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"/api/conversations/{conversationId}/export?format={format}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ConversationExport>(content, _jsonOptions);
+                return new ApiResponse<ConversationExport> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<ConversationExport> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ConversationExport> { Success = false, Error = ex.Message };
+        }
+    }
+
+    public async Task<ApiResponse<ConversationImportResult>> ImportConversationAsync(string importData, string format = "json")
+    {
+        try
+        {
+            var content = new StringContent(importData, System.Text.Encoding.UTF8, GetMimeType(format));
+            var response = await _httpClient.PostAsync("/api/conversations/import", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ConversationImportResult>(responseContent, _jsonOptions);
+                return new ApiResponse<ConversationImportResult> { Success = true, Data = result };
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return new ApiResponse<ConversationImportResult> { Success = false, Error = error };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<ConversationImportResult> { Success = false, Error = ex.Message };
+        }
+    }
+
     public async Task<ApiResponse<CodeResponse>> CodeSearchAsync(string query, List<ConversationExchange>? context = null)
     {
         try
@@ -481,6 +528,17 @@ public class ApiService : IApiService
             ".pdf" => "application/pdf",
             ".txt" => "text/plain",
             _ => "application/octet-stream"
+        };
+    }
+
+    private string GetMimeType(string format)
+    {
+        return format switch
+        {
+            "json" => "application/json",
+            "md" => "text/markdown",
+            "txt" => "text/plain",
+            _ => "application/json"
         };
     }
 }

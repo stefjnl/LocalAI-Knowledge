@@ -1,5 +1,6 @@
 using LocalAI.Web.Components;
 using LocalAI.Web.Services;
+using LocalAI.Core.Interfaces;
 using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,7 +35,10 @@ builder.Services.AddHttpClient<IApiService, ApiService>(client =>
 builder.Services.AddScoped<IApiService, ApiService>();
 
 // Register Conversation service
-builder.Services.AddScoped<IConversationService, ConversationService>();
+builder.Services.AddScoped<LocalAI.Web.Services.IConversationService, ConversationService>();
+
+// Register Conversation Export service
+builder.Services.AddScoped<IConversationExportService, ConversationExportService>();
 
 // Register Chat API service
 builder.Services.AddScoped<IChatApiService, ChatApiService>();
