@@ -1,7 +1,10 @@
 @page "/export"
 @using LocalAI.Web.Services
 @using LocalAI.Core.Models
+@using LocalAI.Core.Interfaces
+@using Microsoft.AspNetCore.Components.Forms
 @inject IApiService ApiService
+@inject IConversationExportService ConversationExportService
 
 <PageTitle>Export</PageTitle>
 
@@ -10,35 +13,37 @@
         <div class="col-lg-8">
 
             <div class="text-center mb-4">
-                <h1 class="display-5 fw-bold text-primary">Export Knowledge</h1>
-                <p class="lead text-muted">Save your search results and knowledge reports</p>
+                <h1 class="display-5 fw-bold text-primary">Export & Import</h1>
+                <p class="lead text-muted">Save and load your conversations and knowledge</p>
             </div>
 
+            <!-- Conversation Export Section -->
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Export Options</h5>
+                    <h5 class="mb-0">Conversation Export</h5>
                 </div>
                 <div class="card-body">
+                    <div class="mb-3">
+                        <label for="conversationSelect" class="form-label">Select Conversation</label>
+                        <select class="form-select" id="conversationSelect" @bind="selectedConversationId">
+                            <option value="">-- Select a conversation --</option>
+                            @foreach (var conv in conversations)
+                            {
+                                <option value="@conv.Id">@conv.Title (@conv.MessageCount messages)</option>
+                            }
+                        </select>
+                    </div>
+
                     <div class="mb-3">
                         <label for="exportFormat" class="form-label">Export Format</label>
                         <select class="form-select" id="exportFormat" @bind="selectedFormat">
                             <option value="json">JSON</option>
-                            <option value="csv">CSV</option>
-                            <option value="txt">Plain Text</option>
                             <option value="md">Markdown</option>
+                            <option value="txt">Plain Text</option>
                         </select>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="exportType" class="form-label">Export Type</label>
-                        <select class="form-select" id="exportType" @bind="selectedType">
-                            <option value="current">Current Search Results</option>
-                            <option value="all">All Knowledge Base</option>
-                            <option value="summary">Knowledge Summary Report</option>
-                        </select>
-                    </div>
-
-                    <button class="btn btn-primary" @onclick="ExportData" disabled="@isExporting">
+                    <button class="btn btn-primary" @onclick="ExportConversation" disabled="@(isExporting || selectedConversationId == Guid.Empty)">
                         @if (isExporting)
                         {
                             <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -46,7 +51,32 @@
                         }
                         else
                         {
-                            <span>📥 Export Data</span>
+                            <span>📤 Export Conversation</span>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            <!-- Import Section -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Import Conversation</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="importFile" class="form-label">Select File to Import</label>
+                        <input type="file" class="form-control" id="importFile" @ref="fileInput" accept=".json,.md,.txt" @onchange="OnFileSelected" />
+                    </div>
+
+                    <button class="btn btn-success" @onclick="ImportConversation" disabled="@(isImporting || selectedFile == null)">
+                        @if (isImporting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Importing...</span>
+                        }
+                        else
+                        {
+                            <span>📥 Import Conversation</span>
                         }
                     </button>
                 </div>
@@ -95,10 +125,14 @@
 
 @code {
     private string selectedFormat = "json";
-    private string selectedType = "current";
+    private Guid selectedConversationId = Guid.Empty;
     private bool isExporting = false;
+    private bool isImporting = false;
     private string? exportMessage;
     private List<ExportItem> recentExports = new();
+    private List<ChatConversationSummary> conversations = new();
+    private ElementReference fileInput;
+    private IBrowserFile? selectedFile;
 
     public class ExportItem
     {
@@ -108,8 +142,26 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Load conversations
+        await LoadConversations();
         // Load recent exports from local storage or server
         await LoadRecentExports();
+    }
+
+    private async Task LoadConversations()
+    {
+        try
+        {
+            var response = await ApiService.GetConversationsAsync();
+            if (response.Success && response.Data != null)
+            {
+                conversations = response.Data;
+            }
+        }
+        catch (Exception ex)
+        {
+            exportMessage = $"Error loading conversations: {ex.Message}";
+        }
     }
 
     private async Task LoadRecentExports()
@@ -117,32 +169,91 @@
         // In a real implementation, this would load from local storage or server
         // For now, we'll just show some sample data
         recentExports = new List<ExportItem>
-{
-new ExportItem { FileName = "knowledge-export-2025-08-15.json", Timestamp = DateTime.Now.AddDays(-1) },
-new ExportItem { FileName = "search-results-2025-08-14.csv", Timestamp = DateTime.Now.AddDays(-2) }
-};
+        {
+            new ExportItem { FileName = "knowledge-export-2025-08-15.json", Timestamp = DateTime.Now.AddDays(-1) },
+            new ExportItem { FileName = "search-results-2025-08-14.csv", Timestamp = DateTime.Now.AddDays(-2) }
+        };
     }
 
-    private async Task ExportData()
+    private async Task ExportConversation()
     {
+        if (selectedConversationId == Guid.Empty) return;
+
         isExporting = true;
         exportMessage = null;
 
         try
         {
-            // In a real implementation, this would call the API to generate the export
-            // For now, we'll simulate the process
-            await Task.Delay(2000);
+            // Use the API to export the conversation
+            var exportResponse = await ApiService.ExportConversationAsync(selectedConversationId, selectedFormat);
+            if (!exportResponse.Success || exportResponse.Data == null)
+            {
+                exportMessage = "Failed to export conversation.";
+                return;
+            }
+
+            // Generate export data based on format using the injected service
+            string exportContent = selectedFormat switch
+            {
+                "json" => await ConversationExportService.ExportToJsonAsync(new ChatConversation 
+                { 
+                    Id = exportResponse.Data.ConversationId,
+                    Title = exportResponse.Data.Title,
+                    Messages = exportResponse.Data.Messages.Select(m => new ConversationMessage 
+                    { 
+                        Role = m.Role, 
+                        Content = m.Content, 
+                        Timestamp = m.Timestamp 
+                    }).ToList()
+                }),
+                "md" => await ConversationExportService.ExportToMarkdownAsync(new ChatConversation 
+                { 
+                    Id = exportResponse.Data.ConversationId,
+                    Title = exportResponse.Data.Title,
+                    Messages = exportResponse.Data.Messages.Select(m => new ConversationMessage 
+                    { 
+                        Role = m.Role, 
+                        Content = m.Content, 
+                        Timestamp = m.Timestamp 
+                    }).ToList()
+                }),
+                "txt" => await ConversationExportService.ExportToTextAsync(new ChatConversation 
+                { 
+                    Id = exportResponse.Data.ConversationId,
+                    Title = exportResponse.Data.Title,
+                    Messages = exportResponse.Data.Messages.Select(m => new ConversationMessage 
+                    { 
+                        Role = m.Role, 
+                        Content = m.Content, 
+                        Timestamp = m.Timestamp 
+                    }).ToList()
+                }),
+                _ => await ConversationExportService.ExportToJsonAsync(new ChatConversation 
+                { 
+                    Id = exportResponse.Data.ConversationId,
+                    Title = exportResponse.Data.Title,
+                    Messages = exportResponse.Data.Messages.Select(m => new ConversationMessage 
+                    { 
+                        Role = m.Role, 
+                        Content = m.Content, 
+                        Timestamp = m.Timestamp 
+                    }).ToList()
+                })
+            };
+
+            // Trigger download
+            var fileName = $"conversation-{exportResponse.Data.Title.Replace(" ", "-")}-{DateTime.Now:yyyy-MM-dd}.{selectedFormat}";
+            await DownloadFile(exportContent, fileName, GetMimeType(selectedFormat));
 
             // Add to recent exports
             var newExport = new ExportItem
             {
-                FileName = $"export-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.{selectedFormat}",
+                FileName = fileName,
                 Timestamp = DateTime.Now
             };
             recentExports.Insert(0, newExport);
 
-            exportMessage = $"Export completed successfully: {newExport.FileName}";
+            exportMessage = $"Export completed successfully: {fileName}";
         }
         catch (Exception ex)
         {
@@ -151,6 +262,144 @@ new ExportItem { FileName = "search-results-2025-08-14.csv", Timestamp = DateTim
         finally
         {
             isExporting = false;
+        }
+    }
+
+    private async Task<string> GenerateJsonExport(ConversationExport export)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(export, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private async Task<string> GenerateMarkdownExport(ConversationExport export)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"# {export.Title}");
+        sb.AppendLine();
+        sb.AppendLine($"Exported on: {export.ExportedAt:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"Message count: {export.Messages.Count}");
+        sb.AppendLine($"Format: {export.Format}");
+        sb.AppendLine();
+        sb.AppendLine("---");
+        sb.AppendLine();
+
+        foreach (var message in export.Messages)
+        {
+            var role = message.Role == "user" ? "User" : "Assistant";
+            sb.AppendLine($"## {role} ({message.Timestamp:yyyy-MM-dd HH:mm:ss})");
+            sb.AppendLine();
+            sb.AppendLine(message.Content);
+            sb.AppendLine();
+            sb.AppendLine("---");
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    private async Task<string> GenerateTextExport(ConversationExport export)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Conversation: {export.Title}");
+        sb.AppendLine($"Exported on: {export.ExportedAt:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"Message count: {export.Messages.Count}");
+        sb.AppendLine($"Format: {export.Format}");
+        sb.AppendLine(new string('=', 50));
+        sb.AppendLine();
+
+        foreach (var message in export.Messages)
+        {
+            var role = message.Role == "user" ? "User" : "Assistant";
+            sb.AppendLine($"[{role}] {message.Timestamp:yyyy-MM-dd HH:mm:ss}");
+            sb.AppendLine(message.Content);
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    private string GetMimeType(string format)
+    {
+        return format switch
+        {
+            "json" => "application/json",
+            "md" => "text/markdown",
+            "txt" => "text/plain",
+            _ => "application/octet-stream"
+        };
+    }
+
+    private async Task DownloadFile(string content, string fileName, string mimeType)
+    {
+        var fileBytes = System.Text.Encoding.UTF8.GetBytes(content);
+        using var stream = new MemoryStream(fileBytes);
+        using var reader = new StreamReader(stream);
+        var fileContent = await reader.ReadToEndAsync();
+        
+        // In a real implementation, you would use JS interop to trigger the download
+        // For now, we'll just show a message
+        exportMessage = $"File ready for download: {fileName}";
+    }
+
+    private void OnFileSelected(ChangeEventArgs e)
+    {
+        var files = e.Value as IBrowserFile[];
+        if (files != null && files.Length > 0)
+        {
+            selectedFile = files[0];
+        }
+        else
+        {
+            selectedFile = null;
+        }
+    }
+
+    private async Task ImportConversation()
+    {
+        if (selectedFile == null) return;
+
+        isImporting = true;
+        exportMessage = null;
+
+        try
+        {
+            // Read file content
+            using var stream = selectedFile.OpenReadStream(10_000_000); // 10MB limit
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+
+            // Determine format from file extension
+            var fileExtension = System.IO.Path.GetExtension(selectedFile.Name).ToLowerInvariant();
+            var format = fileExtension switch
+            {
+                ".json" => "json",
+                ".md" => "md",
+                ".txt" => "txt",
+                _ => "json"
+            };
+
+            // Call the API to import the conversation
+            var importResponse = await ApiService.ImportConversationAsync(content, format);
+            if (!importResponse.Success)
+            {
+                exportMessage = $"Import failed: {string.Join(", ", importResponse.Data?.Errors ?? new List<string> { "Unknown error" })}";
+                return;
+            }
+
+            exportMessage = $"Import completed successfully: {selectedFile.Name} ({importResponse.Data?.MessagesImported} messages)";
+            
+            // Refresh conversations list
+            await LoadConversations();
+        }
+        catch (Exception ex)
+        {
+            exportMessage = $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            isImporting = false;
+            selectedFile = null;
+            // Reset file input
+            await fileInput.FocusAsync();
         }
     }
 

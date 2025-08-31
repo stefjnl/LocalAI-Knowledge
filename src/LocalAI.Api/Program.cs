@@ -33,7 +33,7 @@ public class Program
             .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
             .AddJsonFile(Path.Combine(rootPath, "appsettings.json"), optional: true, reloadOnChange: true)
             .AddEnvironmentVariables();
-            
+
         // Debug: Print out the OpenRouter API key (masked) to verify it's loaded
         var openRouterKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? "NOT SET";
         if (openRouterKey != "NOT SET" && openRouterKey.Length > 10)
@@ -69,6 +69,7 @@ public class Program
         builder.Services.AddScoped<IRAGService, RAGService>();
         builder.Services.AddScoped<IDisplayService, DisplayService>();
         builder.Services.AddScoped<LocalAI.Core.Interfaces.IConversationService, LocalAI.Infrastructure.Services.FileBasedConversationService>();
+        builder.Services.AddScoped<LocalAI.Core.Interfaces.IConversationExportService, LocalAI.Infrastructure.Services.ConversationExportService>();
 
         // Add logging
         builder.Services.AddLogging(logging =>
@@ -286,12 +287,12 @@ public class Program
             {
                 // Delete document from vector database
                 var vectorDeleteSuccess = await vectorSearch.DeleteDocumentAsync(documentName);
-                
+
                 if (vectorDeleteSuccess)
                 {
                     // Delete metadata
                     processor.DeleteFileMetadata(documentName);
-                    
+
                     return Results.Ok(new
                     {
                         Success = true,
@@ -459,7 +460,7 @@ public class Program
                 // Add context to the query if available
                 var queryWithContext = request.Query;
                 var context = request.Context ?? new List<ConversationExchange>();
-                
+
                 // Generate RAG response with timing, passing conversation context
                 var generationStopwatch = System.Diagnostics.Stopwatch.StartNew();
                 var ragResponse = await ragService.GenerateResponseAsync(request.Query, searchResults.Take(5).ToList(), context);
@@ -498,7 +499,7 @@ public class Program
                 logger.LogInformation("[DEBUG] Collection stats endpoint called");
                 var collectionName = "knowledge"; // Default collection name
                 var exists = await vectorSearch.CollectionExistsAsync(collectionName);
-                
+
                 if (!exists)
                 {
                     return Results.Ok(new
@@ -513,12 +514,12 @@ public class Program
                 using var httpClient = new HttpClient();
                 var baseUrl = Environment.GetEnvironmentVariable("QDRANT_BASE_URL") ?? "http://host.docker.internal:6333";
                 var response = await httpClient.GetAsync($"{baseUrl}/collections/{collectionName}");
-                
+
                 if (response.IsSuccessStatusCode)
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
                     var result = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(responseContent);
-                    
+
                     return Results.Ok(new
                     {
                         Success = true,
@@ -526,7 +527,7 @@ public class Program
                         CollectionInfo = result.GetProperty("result").ToString()
                     });
                 }
-                
+
                 return Results.Problem($"Failed to get collection info: {response.StatusCode}");
             }
             catch (Exception ex)
@@ -542,7 +543,7 @@ public class Program
             {
                 logger.LogInformation("[DEBUG] Documents endpoint called");
                 var metadata = ((DocumentProcessor)processor).GetAllProcessedDocumentsMetadata();
-                
+
                 return Results.Ok(new
                 {
                     Success = true,
@@ -641,12 +642,12 @@ public class Program
             try
             {
                 logger.LogInformation("[DEBUG] Document chunks endpoint called for filename: {Filename}", filename);
-                
+
                 // Search for chunks with specific source filename
                 using var httpClient = new HttpClient();
                 var baseUrl = Environment.GetEnvironmentVariable("QDRANT_BASE_URL") ?? "http://host.docker.internal:6333";
                 var collectionName = "knowledge";
-                
+
                 var filterPayload = System.Text.Json.JsonSerializer.Serialize(new
                 {
                     filter = new
@@ -857,6 +858,57 @@ public class Program
             catch (Exception ex)
             {
                 return Results.Problem($"Error adding message to conversation: {ex.Message}");
+            }
+        });
+
+        // Conversation Export/Import API Endpoints
+        app.MapGet("/api/conversations/{conversationId}/export", async (Guid conversationId, string format, IConversationService conversationService, IConversationExportService exportService) =>
+        {
+            try
+            {
+                var conversation = await conversationService.GetConversationAsync(conversationId);
+                if (conversation == null)
+                {
+                    return Results.NotFound();
+                }
+
+                var exportData = await exportService.ExportConversationAsync(conversation, format);
+                return Results.Ok(exportData);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error exporting conversation: {ex.Message}");
+            }
+        });
+
+        app.MapPost("/api/conversations/import", async (HttpRequest request, IConversationService conversationService, IConversationExportService exportService) =>
+        {
+            try
+            {
+                using var reader = new StreamReader(request.Body);
+                var importData = await reader.ReadToEndAsync();
+
+                var format = request.Headers["Content-Type"].ToString().ToLower() switch
+                {
+                    "application/json" => "json",
+                    "text/markdown" => "markdown",
+                    "text/plain" => "txt",
+                    _ => "json"
+                };
+
+                var importResult = await exportService.ImportConversationAsync(importData, format);
+                if (!importResult.Success)
+                {
+                    return Results.BadRequest(new { Error = "Import failed", Details = importResult.Errors });
+                }
+
+                // In a real implementation, you would create a new conversation from the imported data
+                // For now, we'll just return the import result
+                return Results.Ok(importResult);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Error importing conversation: {ex.Message}");
             }
         });
 

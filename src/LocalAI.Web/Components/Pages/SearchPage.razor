@@ -9,6 +9,7 @@
 @inject IApiService ApiService
 @inject IConversationService ConversationService
 @inject IConfiguration Configuration
+@inject IJSRuntime JS
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 <PageTitle>Knowledge Search</PageTitle>
@@ -18,44 +19,81 @@
         <!-- Chat History Sidebar -->
         <div class="sidebar @(isSidebarOpen ? "open" : "")">
             <div class="sidebar-header">
-                <h2>Conversations</h2>
-                <button class="close-sidebar-btn" @onclick="ToggleSidebar">✕</button>
+                <div class="sidebar-title-section">
+                    <h2>Conversations</h2>
+                    <div class="sidebar-actions">
+                        <button class="sidebar-toggle-btn" @onclick="ToggleSidebar" title="@(isSidebarOpen ? "Collapse sidebar" : "Expand sidebar")">
+                            @(isSidebarOpen ? "◁" : "▷")
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="sidebar-content">
-                <button class="new-chat-btn" @onclick="() => StartNewChat()">
-                    <span>+</span> New Chat
+                <button class="new-chat-btn" @onclick="() => StartNewChat()" disabled="@conversationsLoading">
+                    <span class="new-chat-icon">+</span>
+                    <span class="new-chat-text">New Chat</span>
                 </button>
                 <div class="conversations-list">
                     @if (conversationsLoading)
                     {
-                        <div class="loading">Loading conversations...</div>
+                        <div class="loading-container">
+                            <div class="loading-spinner"></div>
+                            <span class="loading-text">Loading conversations...</span>
+                        </div>
+                    }
+                    else if (!conversations.Any())
+                    {
+                        <div class="empty-state">
+                            <div class="empty-icon">💬</div>
+                            <p class="empty-text">No conversations yet</p>
+                            <small class="empty-hint">Start a new chat to begin</small>
+                        </div>
                     }
                     else
                     {
-                        @foreach (var conv in conversations)
+                        @foreach (var conv in conversations.OrderByDescending(c => c.UpdatedAt))
                         {
-                            <div class="conversation-item @(currentConversation?.Id == conv.Id ? "active" : "")" 
+                            <div class="conversation-item @(currentConversation?.Id == conv.Id ? "active" : "") @(previewedConversationId == conv.Id ? "previewing" : "")"
                                  @onclick="() => LoadConversation(conv.Id)"
                                  @onmouseover="() => ShowPreview(conv.Id)"
                                  @onmouseout="() => HidePreview()">
                                 <div class="conversation-header">
                                     @if (editingConversationId == conv.Id)
                                     {
-                                        <input type="text" class="conversation-title-edit" @bind="editTitle" @onkeydown="@(e => HandleTitleEditKeydown(e, conv.Id))" @ref="titleEditInput" />
-                                        <button class="save-title-btn" @onclick="() => SaveTitle(conv.Id)">✓</button>
-                                        <button class="cancel-title-btn" @onclick="CancelEditTitle">✗</button>
+                                        <input type="text" class="conversation-title-edit" @bind="editTitle"
+                                               @onkeydown="@(e => HandleTitleEditKeydown(e, conv.Id))"
+                                               @ref="titleEditInput"
+                                               placeholder="Enter conversation title..." />
+                                        <div class="edit-actions">
+                                            <button class="save-title-btn" @onclick="() => SaveTitle(conv.Id)" title="Save title">✓</button>
+                                            <button class="cancel-title-btn" @onclick="CancelEditTitle" title="Cancel">✗</button>
+                                        </div>
                                     }
                                     else
                                     {
-                                        <div class="conversation-title">@GetConversationTitle(conv)</div>
-                                        <button class="edit-title-btn" @onclick="() => StartEditTitle(conv.Id, conv.Title)">✏️</button>
-                                        <button class="delete-conversation-btn" @onclick="() => DeleteConversation(conv.Id)">🗑️</button>
+                                        <div class="conversation-title-section">
+                                            <div class="conversation-title" title="@GetConversationTitle(conv)">
+                                                @GetConversationTitle(conv)
+                                            </div>
+                            <div class="conversation-actions">
+                                <button class="edit-title-btn" @onclick="() => StartEditTitle(conv.Id, conv.Title)"
+                                        @onmouseover:stopPropagation="true" title="Edit title">✏️</button>
+                                <button class="export-conversation-btn" @onclick="() => ExportConversation(conv.Id)"
+                                        @onmouseover:stopPropagation="true" title="Export conversation">📤</button>
+                                <button class="delete-conversation-btn" @onclick="() => DeleteConversation(conv.Id)"
+                                        @onmouseover:stopPropagation="true" title="Delete conversation">🗑️</button>
+                            </div>
+                                        </div>
                                     }
                                 </div>
-                                <div class="conversation-date">@conv.UpdatedAt.ToString("MMM d, h:mm tt")</div>
+                                <div class="conversation-meta">
+                                    <span class="conversation-date">@conv.UpdatedAt.ToString("MMM d, h:mm tt")</span>
+                                </div>
                                 @if (previewedConversationId == conv.Id && conversationPreviews.ContainsKey(conv.Id))
                                 {
-                                    <div class="conversation-preview">@conversationPreviews[conv.Id]</div>
+                                    <div class="conversation-preview">
+                                        <div class="preview-content">@conversationPreviews[conv.Id]</div>
+                                    </div>
                                 }
                             </div>
                         }
@@ -237,44 +275,76 @@
                 </div>
             }
 
-            <!-- Input Area -->
+            <!-- Model Selector (if available) -->
             @if (useOpenRouter)
             {
-                <div class="model-selector">
-                    <label>
-                        <input type="radio" name="model" value="local" checked="@(selectedModel == "local")" @onclick='() => SetModel("local")' />
-                        Local LLM
-                    </label>
-                    <label>
-                        <input type="radio" name="model" value="qwen3-coder" checked="@(selectedModel == "qwen3-coder")" @onclick='() => SetModel("qwen3-coder")' />
-                        Qwen3-Coder
-                    </label>
+                <div class="model-selector-bar">
+                    <div class="model-selector">
+                        <label class="model-option @(selectedModel == "local" ? "active" : "")">
+                            <input type="radio" name="model" value="local" checked="@(selectedModel == "local")" @onclick='() => SetModel("local")' />
+                            <span class="model-label">Local LLM</span>
+                        </label>
+                        <label class="model-option @(selectedModel == "qwen3-coder" ? "active" : "")">
+                            <input type="radio" name="model" value="qwen3-coder" checked="@(selectedModel == "qwen3-coder")" @onclick='() => SetModel("qwen3-coder")' />
+                            <span class="model-label">Qwen3-Coder</span>
+                        </label>
+                    </div>
                 </div>
             }
+
+            <!-- Modern Chat Input Area -->
             <div class="chat-input-container">
-                <div class="input-area">
-                    <div class="input-actions">
-                        <button class="clear-btn" @onclick="ClearConversation" title="Clear conversation">
-                            🗑️
+                <div class="input-area @(isSearching ? "searching" : "")">
+                    <!-- Compact Action Bar -->
+                    <div class="input-toolbar">
+                        <button class="toolbar-btn clear-btn" @onclick="ClearConversation"
+                                title="Clear conversation" disabled="@isSearching">
+                            <span class="btn-icon">🗑️</span>
+                        </button>
+                        <div class="input-hint-compact">
+                            <span class="hint-text">Enter to send • Shift+Enter for new line</span>
+                        </div>
+                    </div>
+
+                    <!-- Main Input Section -->
+                    <div class="input-main">
+                        <div class="input-wrapper">
+                            <textarea class="chat-input" placeholder="@GetPlaceholderText()" @bind="searchQuery"
+                                @onkeypress="OnKeyPress" @oninput="OnInput" @onfocus="OnInputFocus" @onblur="OnInputBlur"
+                                disabled="@isSearching" rows="1" maxlength="2000">
+                            </textarea>
+
+                            @if (!string.IsNullOrWhiteSpace(searchQuery))
+                            {
+                                <div class="input-status">
+                                    <span class="char-count">@searchQuery.Length.ToString()</span>
+                                </div>
+                            }
+                        </div>
+
+                        <button class="send-btn" @onclick="PerformSearch"
+                            disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
+                            @if (isSearching)
+                            {
+                                <div class="send-spinner"></div>
+                            }
+                            else
+                            {
+                                <span class="send-icon">➤</span>
+                            }
                         </button>
                     </div>
-                    <textarea class="chat-input" placeholder="Ask anything about your knowledge base..." @bind="searchQuery"
-                        @onkeypress="OnKeyPress" @oninput="OnInput" disabled="@isSearching" rows="1">
-                    </textarea>
-                    <button class="send-btn" @onclick="PerformSearch"
-                        disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
-                        @if (isSearching)
-                        {
-                            <span class="spinner"></span>
-                        }
-                        else
-                        {
-                            <span>➤</span>
-                        }
-                    </button>
-                </div>
-                <div class="input-hint">
-                    Press Enter to send, Shift+Enter for new line
+
+                    <!-- Search Status -->
+                    @if (isSearching)
+                    {
+                        <div class="search-status">
+                            <span class="searching-indicator">
+                                <span class="searching-dot"></span>
+                                Searching knowledge base...
+                            </span>
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -427,93 +497,30 @@
         try
         {
             var context = await ConversationService.GetRecentContextAsync(3);
+            var trimmedQuery = searchQuery.Trim();
 
-            if (selectedModel == "qwen3-coder" && useOpenRouter)
+            // Perform the search based on selected model
+            var searchResult = await PerformSearchInternal(trimmedQuery, context);
+
+            if (searchResult.Success)
             {
-                var response = await ApiService.CodeSearchAsync(searchQuery.Trim(), context);
-                if (response.Success && response.Data != null)
-                {
-                    searchResponse = new LocalAI.Web.Services.SearchResponse
-                    {
-                        Query = searchQuery.Trim(),
-                        RAGResponse = response.Data.Response,
-                        HasResults = true
-                    };
+                searchResponse = searchResult.Response;
 
-                    await ConversationService.AddToConversationHistoryAsync(searchQuery.Trim(), searchResponse.RAGResponse);
-                    conversationHistory = await ConversationService.GetConversationHistoryAsync();
+                // Update conversation history
+                await UpdateConversationHistory(trimmedQuery, searchResponse.RAGResponse);
 
-                    if (currentConversation != null)
-                    {
-                        await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", searchQuery.Trim());
-                        await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", searchResponse.RAGResponse);
-                        
-                        // Auto-generate title from first query if it's still "New Chat"
-                        if (currentConversation.Title == "New Chat" && conversations != null)
-                        {
-                            var conversation = conversations.FirstOrDefault(c => c.Id == currentConversation.Id);
-                            if (conversation != null)
-                            {
-                                // Generate a title from the first few words of the query
-                                var title = searchQuery.Trim();
-                                if (title.Length > 30)
-                                {
-                                    title = title.Substring(0, 30) + "...";
-                                }
-                                conversation.Title = title;
-                                currentConversation.Title = title;
-                                
-                                // Refresh the conversation list to show the updated title
-                                await LoadConversations();
-                            }
-                        }
-                    }
-                }
-                else
+                // Handle conversation management
+                if (currentConversation != null)
                 {
-                    searchError = response.Error ?? "Unknown error occurred";
+                    await AddMessagesToConversation(currentConversation.Id, trimmedQuery, searchResponse.RAGResponse);
+
+                    // Auto-generate meaningful title if needed
+                    await GenerateConversationTitleIfNeeded(trimmedQuery);
                 }
             }
             else
             {
-                var response = await ApiService.SearchAsync(searchQuery.Trim(), 8, context);
-                if (response.Success && response.Data != null)
-                {
-                    searchResponse = response.Data;
-
-                    await ConversationService.AddToConversationHistoryAsync(searchQuery.Trim(), searchResponse.RAGResponse);
-                    conversationHistory = await ConversationService.GetConversationHistoryAsync();
-
-                    if (currentConversation != null)
-                    {
-                        await ApiService.AddMessageToConversationAsync(currentConversation.Id, "user", searchQuery.Trim());
-                        await ApiService.AddMessageToConversationAsync(currentConversation.Id, "assistant", searchResponse.RAGResponse);
-                        
-                        // Auto-generate title from first query if it's still "New Chat"
-                        if (currentConversation.Title == "New Chat" && conversations != null)
-                        {
-                            var conversation = conversations.FirstOrDefault(c => c.Id == currentConversation.Id);
-                            if (conversation != null)
-                            {
-                                // Generate a title from the first few words of the query
-                                var title = searchQuery.Trim();
-                                if (title.Length > 30)
-                                {
-                                    title = title.Substring(0, 30) + "...";
-                                }
-                                conversation.Title = title;
-                                currentConversation.Title = title;
-                                
-                                // Refresh the conversation list to show the updated title
-                                await LoadConversations();
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    searchError = response.Error ?? "Unknown error occurred";
-                }
+                searchError = searchResult.Error ?? "Unknown error occurred";
             }
         }
         catch (Exception ex)
@@ -528,10 +535,109 @@
         }
     }
 
+    private async Task<(bool Success, LocalAI.Web.Services.SearchResponse? Response, string? Error)> PerformSearchInternal(string query, List<LocalAI.Core.Models.ConversationExchange> context)
+    {
+        if (selectedModel == "qwen3-coder" && useOpenRouter)
+        {
+            var response = await ApiService.CodeSearchAsync(query, context);
+            if (response.Success && response.Data != null)
+            {
+                return (true, new LocalAI.Web.Services.SearchResponse
+                {
+                    Query = query,
+                    RAGResponse = response.Data.Response,
+                    HasResults = true
+                }, null);
+            }
+            return (false, null, response.Error);
+        }
+        else
+        {
+            var response = await ApiService.SearchAsync(query, 8, context);
+            if (response.Success && response.Data != null)
+            {
+                return (true, response.Data, null);
+            }
+            return (false, null, response.Error);
+        }
+    }
+
+    private async Task UpdateConversationHistory(string query, string response)
+    {
+        await ConversationService.AddToConversationHistoryAsync(query, response);
+        conversationHistory = await ConversationService.GetConversationHistoryAsync();
+    }
+
+    private async Task AddMessagesToConversation(Guid conversationId, string query, string response)
+    {
+        await ApiService.AddMessageToConversationAsync(conversationId, "user", query);
+        await ApiService.AddMessageToConversationAsync(conversationId, "assistant", response);
+    }
+
+    private async Task GenerateConversationTitleIfNeeded(string query)
+    {
+        if (currentConversation == null || currentConversation.Title != "New Chat")
+            return;
+
+        var generatedTitle = GenerateSmartTitle(query);
+        if (!string.IsNullOrWhiteSpace(generatedTitle))
+        {
+            // Update current conversation
+            currentConversation.Title = generatedTitle;
+
+            // Update in conversations list
+            var conversation = conversations.FirstOrDefault(c => c.Id == currentConversation.Id);
+            if (conversation != null)
+            {
+                conversation.Title = generatedTitle;
+            }
+
+            // Note: API title update not implemented yet - would need backend support
+            // For now, titles are only updated locally
+        }
+    }
+
+    private string GenerateSmartTitle(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return "New Chat";
+
+        // Remove common question words and clean up
+        var cleanQuery = query
+            .ToLower()
+            .Replace("what is", "")
+            .Replace("what are", "")
+            .Replace("how to", "")
+            .Replace("how do", "")
+            .Replace("can you", "")
+            .Replace("could you", "")
+            .Replace("please", "")
+            .Replace("tell me", "")
+            .Replace("explain", "")
+            .Replace("?", "")
+            .Trim();
+
+        // Capitalize first letter
+        if (cleanQuery.Length > 0)
+        {
+            cleanQuery = char.ToUpper(cleanQuery[0]) + cleanQuery.Substring(1);
+        }
+
+        // Limit length and add ellipsis if needed
+        if (cleanQuery.Length > 35)
+        {
+            cleanQuery = cleanQuery.Substring(0, 32) + "...";
+        }
+
+        return string.IsNullOrWhiteSpace(cleanQuery) ? "New Chat" : cleanQuery;
+    }
+
     private async Task ClearConversation()
     {
         await ConversationService.ClearConversationHistoryAsync();
         conversationHistory = new List<ConversationHistoryItem>();
+        searchResponse = null;
+        searchError = "";
         StateHasChanged(); // Force UI update
     }
 
@@ -546,7 +652,11 @@
     private void OnInput(ChangeEventArgs e)
     {
         searchQuery = e.Value?.ToString() ?? "";
-        StateHasChanged();
+        // Only trigger StateHasChanged for significant changes to reduce re-renders
+        if (searchQuery.Length % 5 == 0 || string.IsNullOrEmpty(searchQuery))
+        {
+            StateHasChanged();
+        }
     }
 
     private string FormatResponse(string response)
@@ -844,20 +954,80 @@
         }
     }
 
+    private async Task ExportConversation(Guid conversationId)
+    {
+        try
+        {
+            // In a real implementation, you would:
+            // 1. Fetch the full conversation from the API
+            // 2. Generate export data in the desired format
+            // 3. Trigger a file download
+            
+            // For now, we'll just show a message
+            Console.WriteLine($"Export requested for conversation {conversationId}");
+            
+            // Show a simple alert for now
+            await JS.InvokeVoidAsync("alert", $"Export functionality would download conversation {conversationId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error exporting conversation: {ex.Message}");
+        }
+    }
+
     private async Task ShowPreview(Guid conversationId)
     {
         // Only show preview if we're not editing a title
         if (editingConversationId == Guid.Empty)
         {
             previewedConversationId = conversationId;
-            
-            // Generate a preview from the conversation
-            // In a real implementation, this would come from the API
-            var preview = "Preview of conversation...";
-            conversationPreviews[conversationId] = preview;
-            
+
+            // Generate a meaningful preview from the conversation
+            if (!conversationPreviews.ContainsKey(conversationId))
+            {
+                var preview = await GenerateConversationPreview(conversationId);
+                conversationPreviews[conversationId] = preview;
+            }
+
             StateHasChanged();
         }
+    }
+
+    private async Task<string> GenerateConversationPreview(Guid conversationId)
+    {
+        try
+        {
+            // Try to get preview from API first
+            var response = await ApiService.GetConversationAsync(conversationId);
+            if (response.Success && response.Data != null && response.Data.Messages.Any())
+            {
+                var messages = response.Data.Messages;
+                var firstUserMessage = messages.FirstOrDefault(m => m.Role == "user");
+
+                if (firstUserMessage != null)
+                {
+                    var preview = firstUserMessage.Content.Length > 50
+                        ? firstUserMessage.Content.Substring(0, 47) + "..."
+                        : firstUserMessage.Content;
+
+                    var messageCount = messages.Count;
+                    return $"{preview} ({messageCount} messages)";
+                }
+            }
+        }
+        catch
+        {
+            // Fall back to basic preview if API fails
+        }
+
+        // Fallback: generate preview from local conversation data
+        var conversation = conversations.FirstOrDefault(c => c.Id == conversationId);
+        if (conversation != null && !string.IsNullOrEmpty(conversation.Title) && conversation.Title != "New Chat")
+        {
+            return $"{conversation.Title} - {conversation.UpdatedAt.ToString("MMM d")}";
+        }
+
+        return "Click to load conversation...";
     }
 
     private void HidePreview()
@@ -870,5 +1040,26 @@
     {
         showExamples = !showExamples;
         StateHasChanged();
+    }
+
+    private string GetPlaceholderText()
+    {
+        if (isSearching)
+            return "Searching...";
+
+        if (!collectionExists)
+            return "Knowledge base not ready. Please process documents first.";
+
+        return "Ask anything about your knowledge base...";
+    }
+
+    private void OnInputFocus(FocusEventArgs e)
+    {
+        // Could add focus-specific behavior here
+    }
+
+    private void OnInputBlur(FocusEventArgs e)
+    {
+        // Could add blur-specific behavior here
     }
 }
