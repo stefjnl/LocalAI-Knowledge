@@ -1,5 +1,3 @@
-# LocalAI Knowledge Assistant - Codebase Analysis Report
-
 ## 1. Codebase Structure & Architecture Overview
 
 ### Project Structure
