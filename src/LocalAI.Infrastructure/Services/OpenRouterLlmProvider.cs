@@ -42,15 +42,16 @@ namespace LocalAI.Infrastructure.Services
                     new { role = "user", content = prompt }
                 },
                 stream = false,
-                temperature = 0.1,
-                max_tokens = 2000,
-                top_p = 0.95,
-                frequency_penalty = 0.0,
-                presence_penalty = 0.0,
+                temperature = 0.1,        // Lower for factual accuracy
+                max_tokens = 2000,        // Higher for comprehensive responses
+                top_p = 0.95,            // Slightly higher for natural language
+                frequency_penalty = 0.0,  // Removed to avoid penalizing technical terms
+                presence_penalty = 0.0,   // Removed to allow thorough coverage
                 provider = new
                 {
                     order = new[] { "OpenRouter", "Azure", "LocalAI" }
-                }
+                },
+                stop = new[] { "<|im_end|>", "<|endoftext|>" } // Prevent infinite generation
             });
 
             var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
