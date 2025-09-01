@@ -164,7 +164,7 @@
         }
     }
 
-    private async Task LoadRecentExports()
+    private Task LoadRecentExports()
     {
         // In a real implementation, this would load from local storage or server
         // For now, we'll just show some sample data
@@ -173,6 +173,7 @@
             new ExportItem { FileName = "knowledge-export-2025-08-15.json", Timestamp = DateTime.Now.AddDays(-1) },
             new ExportItem { FileName = "search-results-2025-08-14.csv", Timestamp = DateTime.Now.AddDays(-2) }
         };
+        return Task.CompletedTask;
     }
 
     private async Task ExportConversation()
@@ -265,12 +266,13 @@
         }
     }
 
-    private async Task<string> GenerateJsonExport(ConversationExport export)
+    private Task<string> GenerateJsonExport(ConversationExport export)
     {
-        return System.Text.Json.JsonSerializer.Serialize(export, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        var result = System.Text.Json.JsonSerializer.Serialize(export, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        return Task.FromResult(result);
     }
 
-    private async Task<string> GenerateMarkdownExport(ConversationExport export)
+    private Task<string> GenerateMarkdownExport(ConversationExport export)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"# {export.Title}");
@@ -293,10 +295,11 @@
             sb.AppendLine();
         }
 
-        return sb.ToString();
+        var result = sb.ToString();
+        return Task.FromResult(result);
     }
 
-    private async Task<string> GenerateTextExport(ConversationExport export)
+    private Task<string> GenerateTextExport(ConversationExport export)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"Conversation: {export.Title}");
@@ -314,7 +317,8 @@
             sb.AppendLine();
         }
 
-        return sb.ToString();
+        var result = sb.ToString();
+        return Task.FromResult(result);
     }
 
     private string GetMimeType(string format)
@@ -328,16 +332,17 @@
         };
     }
 
-    private async Task DownloadFile(string content, string fileName, string mimeType)
+    private Task DownloadFile(string content, string fileName, string mimeType)
     {
         var fileBytes = System.Text.Encoding.UTF8.GetBytes(content);
         using var stream = new MemoryStream(fileBytes);
         using var reader = new StreamReader(stream);
-        var fileContent = await reader.ReadToEndAsync();
+        var fileContent = reader.ReadToEnd();
         
         // In a real implementation, you would use JS interop to trigger the download
         // For now, we'll just show a message
         exportMessage = $"File ready for download: {fileName}";
+        return Task.CompletedTask;
     }
 
     private void OnFileSelected(ChangeEventArgs e)

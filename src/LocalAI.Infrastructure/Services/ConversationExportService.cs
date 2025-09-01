@@ -7,9 +7,9 @@ namespace LocalAI.Infrastructure.Services;
 
 public class ConversationExportService : IConversationExportService
 {
-    public async Task<ConversationExport> ExportConversationAsync(ChatConversation conversation, string format = "json")
+    public Task<ConversationExport> ExportConversationAsync(ChatConversation conversation, string format = "json")
     {
-        return format.ToLower() switch
+        var result = format.ToLower() switch
         {
             "markdown" => new ConversationExport
             {
@@ -75,9 +75,11 @@ public class ConversationExportService : IConversationExportService
                 }
             }
         };
+        
+        return Task.FromResult(result);
     }
 
-    public async Task<string> ExportToMarkdownAsync(ChatConversation conversation)
+    public Task<string> ExportToMarkdownAsync(ChatConversation conversation)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"# {conversation.Title}");
@@ -104,10 +106,10 @@ public class ConversationExportService : IConversationExportService
             sb.AppendLine();
         }
 
-        return sb.ToString();
+        return Task.FromResult(sb.ToString());
     }
 
-    public async Task<string> ExportToTextAsync(ChatConversation conversation)
+    public Task<string> ExportToTextAsync(ChatConversation conversation)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Conversation: {conversation.Title}");
@@ -133,7 +135,7 @@ public class ConversationExportService : IConversationExportService
             sb.AppendLine();
         }
 
-        return sb.ToString();
+        return Task.FromResult(sb.ToString());
     }
 
     public async Task<string> ExportToJsonAsync(ChatConversation conversation)
@@ -162,81 +164,87 @@ public class ConversationExportService : IConversationExportService
         };
     }
 
-    public async Task<ConversationImportResult> ImportFromJsonAsync(string jsonData)
+    public Task<ConversationImportResult> ImportFromJsonAsync(string jsonData)
     {
         try
         {
             var exportData = JsonSerializer.Deserialize<ConversationExport>(jsonData);
             if (exportData == null)
             {
-                return new ConversationImportResult
+                var result = new ConversationImportResult
                 {
                     Success = false,
                     ConversationId = null,
                     MessagesImported = 0,
                     Errors = new List<string> { "Failed to deserialize JSON data" }
                 };
+                return Task.FromResult(result);
             }
 
-            return new ConversationImportResult
+            var result2 = new ConversationImportResult
             {
                 Success = true,
                 ConversationId = exportData.ConversationId,
                 MessagesImported = exportData.Messages.Count,
                 Errors = new List<string>()
             };
+            return Task.FromResult(result2);
         }
         catch (Exception ex)
         {
-            return new ConversationImportResult
+            var result = new ConversationImportResult
             {
                 Success = false,
                 ConversationId = null,
                 MessagesImported = 0,
                 Errors = new List<string> { $"Error importing from JSON: {ex.Message}" }
             };
+            return Task.FromResult(result);
         }
     }
 
-    public async Task<ConversationImportResult> ImportFromMarkdownAsync(string markdownData)
+    public Task<ConversationImportResult> ImportFromMarkdownAsync(string markdownData)
     {
         // Simple markdown import - in a real implementation, you would parse the markdown structure
-        return new ConversationImportResult
+        var result = new ConversationImportResult
         {
             Success = true,
             ConversationId = Guid.NewGuid(),
             MessagesImported = 0,
             Errors = new List<string> { "Markdown import is not fully implemented" }
         };
+        return Task.FromResult(result);
     }
 
-    public async Task<ConversationImportResult> ImportFromTextAsync(string textData)
+    public Task<ConversationImportResult> ImportFromTextAsync(string textData)
     {
         // Simple text import - in a real implementation, you would parse the text structure
-        return new ConversationImportResult
+        var result = new ConversationImportResult
         {
             Success = true,
             ConversationId = Guid.NewGuid(),
             MessagesImported = 0,
             Errors = new List<string> { "Text import is not fully implemented" }
         };
+        return Task.FromResult(result);
     }
 
-    public async Task<bool> ValidateExportDataAsync(string data, string format)
+    public Task<bool> ValidateExportDataAsync(string data, string format)
     {
         try
         {
-            return format.ToLower() switch
+            var result = format.ToLower() switch
             {
                 "json" => ValidateJsonExportData(data),
                 "markdown" => ValidateMarkdownExportData(data),
                 "txt" => ValidateTextExportData(data),
                 _ => false
             };
+            return Task.FromResult(result);
         }
         catch
         {
-            return false;
+            return Task.FromResult(false);
         }
     }
 
