@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 // Load environment variables
 var rootPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", ".."));
@@ -58,11 +59,17 @@ services.AddScoped<ILlmProvider, OpenRouterLlmProvider>();
 
 // Application Services
 services.AddScoped<IEmbeddingService, EmbeddingService>();
+services.Decorate<IEmbeddingService, CachingEmbeddingService>();
 services.AddScoped<IVectorSearchService, VectorSearchService>();
+services.Decorate<IVectorSearchService, CachingVectorSearchService>();
 services.AddScoped<IDocumentProcessor, DocumentProcessor>();
 services.AddScoped<IRAGService, RAGService>();
+services.Decorate<IRAGService, CachingRAGService>();
 services.AddScoped<IDisplayService, DisplayService>();
 services.AddLogging(builder => builder.AddConsole());
+
+// Add memory cache
+services.AddMemoryCache();
 
 // Build service provider
 var serviceProvider = services.BuildServiceProvider();
