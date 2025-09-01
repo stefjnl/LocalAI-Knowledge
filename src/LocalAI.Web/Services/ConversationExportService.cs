@@ -5,9 +5,9 @@ namespace LocalAI.Web.Services;
 
 public class ConversationExportService : IConversationExportService
 {
-    public async Task<ConversationExport> ExportConversationAsync(ChatConversation conversation, string format = "json")
+    public Task<ConversationExport> ExportConversationAsync(ChatConversation conversation, string format = "json")
     {
-        return new ConversationExport
+        var result = new ConversationExport
         {
             ConversationId = conversation.Id,
             Title = conversation.Title,
@@ -28,6 +28,7 @@ public class ConversationExportService : IConversationExportService
                 { "updatedAt", conversation.UpdatedAt }
             }
         };
+        return Task.FromResult(result);
     }
 
     public async Task<string> ExportToMarkdownAsync(ChatConversation conversation)
@@ -79,37 +80,40 @@ public class ConversationExportService : IConversationExportService
         }
     }
 
-    public async Task<ConversationImportResult> ImportFromJsonAsync(string jsonData)
+    public Task<ConversationImportResult> ImportFromJsonAsync(string jsonData)
     {
         try
         {
             var export = System.Text.Json.JsonSerializer.Deserialize<ConversationExport>(jsonData);
             if (export == null)
             {
-                return new ConversationImportResult
+                var result = new ConversationImportResult
                 {
                     Success = false,
                     Errors = new List<string> { "Failed to deserialize JSON data" }
                 };
+                return Task.FromResult(result);
             }
 
-            return new ConversationImportResult
+            var result2 = new ConversationImportResult
             {
                 Success = true,
                 MessagesImported = export.Messages.Count
             };
+            return Task.FromResult(result2);
         }
         catch (Exception ex)
         {
-            return new ConversationImportResult
+            var result = new ConversationImportResult
             {
                 Success = false,
                 Errors = new List<string> { $"JSON import failed: {ex.Message}" }
             };
+            return Task.FromResult(result);
         }
     }
 
-    public async Task<ConversationImportResult> ImportFromMarkdownAsync(string markdownData)
+    public Task<ConversationImportResult> ImportFromMarkdownAsync(string markdownData)
     {
         // Simple markdown parsing - in a real implementation, you would have more robust parsing
         try
@@ -155,24 +159,26 @@ public class ConversationExportService : IConversationExportService
                 });
             }
 
-            return new ConversationImportResult
+            var result = new ConversationImportResult
             {
                 Success = true,
                 MessagesImported = messages.Count
             };
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
-            return new ConversationImportResult
+            var result = new ConversationImportResult
             {
                 Success = false,
                 Errors = new List<string> { $"Markdown import failed: {ex.Message}" }
             };
+            return Task.FromResult(result);
         }
     }
 
 
-    public async Task<ConversationImportResult> ImportFromTextAsync(string textData)
+    public Task<ConversationImportResult> ImportFromTextAsync(string textData)
     {
         // Simple text parsing - in a real implementation, you would have more robust parsing
         try
@@ -218,19 +224,21 @@ public class ConversationExportService : IConversationExportService
                 });
             }
 
-            return new ConversationImportResult
+            var result = new ConversationImportResult
             {
                 Success = true,
                 MessagesImported = messages.Count
             };
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
-            return new ConversationImportResult
+            var result = new ConversationImportResult
             {
                 Success = false,
                 Errors = new List<string> { $"Text import failed: {ex.Message}" }
             };
+            return Task.FromResult(result);
         }
     }
 
@@ -247,12 +255,13 @@ public class ConversationExportService : IConversationExportService
         }
     }
 
-    private async Task<string> GenerateJsonExport(ConversationExport export)
+    private Task<string> GenerateJsonExport(ConversationExport export)
     {
-        return System.Text.Json.JsonSerializer.Serialize(export, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        var result = System.Text.Json.JsonSerializer.Serialize(export, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        return Task.FromResult(result);
     }
 
-    private async Task<string> GenerateMarkdownExport(ConversationExport export)
+    private Task<string> GenerateMarkdownExport(ConversationExport export)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"# {export.Title}");
@@ -275,10 +284,11 @@ public class ConversationExportService : IConversationExportService
             sb.AppendLine();
         }
 
-        return sb.ToString();
+        var result = sb.ToString();
+        return Task.FromResult(result);
     }
 
-    private async Task<string> GenerateTextExport(ConversationExport export)
+    private Task<string> GenerateTextExport(ConversationExport export)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"Conversation: {export.Title}");
@@ -296,6 +306,7 @@ public class ConversationExportService : IConversationExportService
             sb.AppendLine();
         }
 
-        return sb.ToString();
+        var result = sb.ToString();
+        return Task.FromResult(result);
     }
 }

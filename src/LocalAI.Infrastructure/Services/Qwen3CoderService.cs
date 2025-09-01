@@ -91,18 +91,18 @@ namespace LocalAI.Infrastructure.Services
 
         private class OpenAIResponse
         {
-            public List<Choice> Choices { get; set; }
+            public List<Choice>? Choices { get; set; }
         }
 
         private class Choice
         {
-            public Message Message { get; set; }
+            public Message? Message { get; set; }
         }
 
         private class Message
         {
-            public string Role { get; set; }
-            public string Content { get; set; }
+            public string? Role { get; set; }
+            public string? Content { get; set; }
         }
     }
 }

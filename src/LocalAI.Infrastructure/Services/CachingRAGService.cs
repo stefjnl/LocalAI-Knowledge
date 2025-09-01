@@ -37,7 +37,7 @@ namespace LocalAI.Infrastructure.Services
             var contextKey = string.Join("|", conversationContext.Select(c => $"{c.Query}:{c.Response}"));
             var cacheKey = $"rag_response_{query}_{searchResultsKey}_{contextKey}";
 
-            if (_cache.TryGetValue(cacheKey, out string cachedResponse))
+            if (_cache.TryGetValue(cacheKey, out string? cachedResponse) && !string.IsNullOrEmpty(cachedResponse))
             {
                 _logger.LogDebug("RAG response retrieved from cache for query: {Query}", query);
                 return cachedResponse;

@@ -47,7 +47,7 @@ namespace LocalAI.Infrastructure.Services
         {
             var cacheKey = $"search_{query}_{limit}";
             
-            if (_cache.TryGetValue(cacheKey, out List<SearchResult> cachedResults))
+            if (_cache.TryGetValue(cacheKey, out List<SearchResult>? cachedResults) && cachedResults != null)
             {
                 _logger.LogDebug("Search results retrieved from cache for query: {Query}", query);
                 return cachedResults;

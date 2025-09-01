@@ -354,7 +354,6 @@
 @code {
     private string searchQuery = "";
     private bool isSearching = false;
-    private bool isProcessing = false;
     private bool collectionExists = false;
     private string statusMessage = "";
     private string searchError = "";
@@ -458,7 +457,6 @@
 
     private async Task ProcessDocuments()
     {
-        isProcessing = true;
         try
         {
             var response = await ApiService.ProcessDocumentsAsync();
@@ -480,10 +478,6 @@
         {
             statusMessage = $"Error: {ex.Message}";
         }
-        finally
-        {
-            isProcessing = false;
-        }
     }
 
     private async Task PerformSearch()
@@ -502,7 +496,7 @@
             // Perform the search based on selected model
             var searchResult = await PerformSearchInternal(trimmedQuery, context);
 
-            if (searchResult.Success)
+            if (searchResult.Success && searchResult.Response != null)
             {
                 searchResponse = searchResult.Response;
 
@@ -574,10 +568,10 @@
         await ApiService.AddMessageToConversationAsync(conversationId, "assistant", response);
     }
 
-    private async Task GenerateConversationTitleIfNeeded(string query)
+    private Task GenerateConversationTitleIfNeeded(string query)
     {
         if (currentConversation == null || currentConversation.Title != "New Chat")
-            return;
+            return Task.CompletedTask;
 
         var generatedTitle = GenerateSmartTitle(query);
         if (!string.IsNullOrWhiteSpace(generatedTitle))
@@ -595,6 +589,7 @@
             // Note: API title update not implemented yet - would need backend support
             // For now, titles are only updated locally
         }
+        return Task.CompletedTask;
     }
 
     private string GenerateSmartTitle(string query)
@@ -876,7 +871,7 @@
         });
     }
 
-    private async Task SaveTitle(Guid conversationId)
+    private Task SaveTitle(Guid conversationId)
     {
         if (!string.IsNullOrWhiteSpace(editTitle))
         {
@@ -904,6 +899,7 @@
         
         editingConversationId = Guid.Empty;
         StateHasChanged();
+        return Task.CompletedTask;
     }
 
     private void CancelEditTitle()

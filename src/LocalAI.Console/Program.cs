@@ -78,9 +78,16 @@ var serviceProvider = services.BuildServiceProvider();
 var transcriptsPath = configuration["DocumentPaths:Transcripts"];
 var pdfsPath = configuration["DocumentPaths:PDFs"];
 
-Directory.CreateDirectory(transcriptsPath);
-Directory.CreateDirectory(pdfsPath);
-Directory.CreateDirectory(Path.Combine(pdfsPath, "llms"));
+if (!string.IsNullOrEmpty(transcriptsPath))
+{
+    Directory.CreateDirectory(transcriptsPath);
+}
+
+if (!string.IsNullOrEmpty(pdfsPath))
+{
+    Directory.CreateDirectory(pdfsPath);
+    Directory.CreateDirectory(Path.Combine(pdfsPath, "llms"));
+}
 
 // Helper methods for enhanced logging
 void LogProgress(string message)

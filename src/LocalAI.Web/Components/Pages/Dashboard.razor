@@ -300,7 +300,7 @@
         }
     }
 
-    private async Task Search()
+    private Task Search()
     {
         if (!string.IsNullOrWhiteSpace(searchQuery))
         {
@@ -319,6 +319,7 @@
             
             searchQuery = "";
         }
+        return Task.CompletedTask;
     }
 
     // Helper class for recent queries

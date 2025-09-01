@@ -73,7 +73,7 @@ public class ConversationSummarizationService : IConversationSummarizationServic
         }
     }
 
-    public async Task<bool> UpdateSummaryAsync(Guid conversationId, ConversationSummary summary)
+    public Task<bool> UpdateSummaryAsync(Guid conversationId, ConversationSummary summary)
     {
         try
         {
@@ -81,41 +81,41 @@ public class ConversationSummarizationService : IConversationSummarizationServic
             // For now, we'll just log it
             _logger.LogInformation("Updated summary for conversation {ConversationId}: {SummaryContent}",
                 conversationId, summary.Content);
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating summary for conversation {ConversationId}", conversationId);
-            return false;
+            return Task.FromResult(false);
         }
     }
 
-    public async Task<ConversationSummary?> GetSummaryAsync(Guid conversationId)
+    public Task<ConversationSummary?> GetSummaryAsync(Guid conversationId)
     {
         try
         {
             // This would typically retrieve the summary from the database
             // For now, return null to indicate no cached summary
-            return null;
+            return Task.FromResult<ConversationSummary?>(null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving summary for conversation {ConversationId}", conversationId);
-            return null;
+            return Task.FromResult<ConversationSummary?>(null);
         }
     }
 
-    public async Task<List<string>> ExtractKeyTopicsAsync(List<ConversationMessage> messages)
+    public Task<List<string>> ExtractKeyTopicsAsync(List<ConversationMessage> messages)
     {
         try
         {
             if (!messages.Any())
-                return new List<string>();
+                return Task.FromResult(new List<string>());
 
             // Simple keyword extraction (could be enhanced with NLP)
             var userMessages = messages.Where(m => m.Role == "user").ToList();
             if (!userMessages.Any())
-                return new List<string>();
+                return Task.FromResult(new List<string>());
 
             var allContent = string.Join(" ", userMessages.Select(m => m.Content));
             var words = allContent.Split(new[] { ' ', '.', ',', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
@@ -126,12 +126,12 @@ public class ConversationSummarizationService : IConversationSummarizationServic
                 .Select(g => g.Key)
                 .ToList();
 
-            return words;
+            return Task.FromResult(words);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error extracting key topics");
-            return new List<string>();
+            return Task.FromResult(new List<string>());
         }
     }
 
@@ -140,14 +140,16 @@ public class ConversationSummarizationService : IConversationSummarizationServic
         return await GenerateFollowUpSuggestionsFromMessagesAsync(conversation.Messages, maxSuggestions);
     }
 
-    public async Task<bool> ShouldGenerateSummaryAsync(ChatConversation conversation)
+    public Task<bool> ShouldGenerateSummaryAsync(ChatConversation conversation)
     {
         // Generate summary if conversation has more than 10 messages or is older than 1 hour
         var messageCountThreshold = 10;
         var ageThreshold = TimeSpan.FromHours(1);
 
-        return conversation.Messages.Count >= messageCountThreshold ||
+        var result = conversation.Messages.Count >= messageCountThreshold ||
                (DateTime.UtcNow - conversation.CreatedAt) >= ageThreshold;
+               
+        return Task.FromResult(result);
     }
 
     private async Task<string> GenerateSummaryContentAsync(List<ConversationMessage> messages)
@@ -179,16 +181,16 @@ public class ConversationSummarizationService : IConversationSummarizationServic
         return $"Conversation with {userMessageCount} user messages and {assistantMessageCount} assistant responses.";
     }
 
-    private async Task<List<string>> GenerateFollowUpSuggestionsFromMessagesAsync(List<ConversationMessage> messages, int maxSuggestions = 5)
+    private Task<List<string>> GenerateFollowUpSuggestionsFromMessagesAsync(List<ConversationMessage> messages, int maxSuggestions = 5)
     {
         try
         {
             if (!messages.Any())
-                return new List<string>();
+                return Task.FromResult(new List<string>());
 
             var lastUserMessage = messages.LastOrDefault(m => m.Role == "user");
             if (lastUserMessage == null)
-                return new List<string>();
+                return Task.FromResult(new List<string>());
 
             // Generate follow-up suggestions based on the last user message
             var suggestions = new List<string>();
@@ -219,12 +221,12 @@ public class ConversationSummarizationService : IConversationSummarizationServic
             suggestions.Add("What are the implications?");
             suggestions.Add("How does this compare to other approaches?");
 
-            return suggestions.Take(maxSuggestions).ToList();
+            return Task.FromResult(suggestions.Take(maxSuggestions).ToList());
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating follow-up suggestions");
-            return new List<string>();
+            return Task.FromResult(new List<string>());
         }
     }
 

@@ -93,20 +93,20 @@ public class FileBasedConversationService : IConversationService
         return conversation;
     }
 
-    public async Task<bool> DeleteConversationAsync(Guid id)
+    public Task<bool> DeleteConversationAsync(Guid id)
     {
         var filePath = Path.Combine(_conversationsDirectory, $"{id}.json");
         if (!File.Exists(filePath))
-            return false;
+            return Task.FromResult(false);
 
         try
         {
             File.Delete(filePath);
-            return true;
+            return Task.FromResult(true);
         }
         catch
         {
-            return false;
+            return Task.FromResult(false);
         }
     }
 
@@ -140,17 +140,17 @@ public class FileBasedConversationService : IConversationService
     }
 
     // Enhanced conversation features
-    public async Task<ConversationSummary?> GenerateConversationSummaryAsync(Guid conversationId)
+    public Task<ConversationSummary?> GenerateConversationSummaryAsync(Guid conversationId)
     {
         // This would typically use a summarization service
         // For now, return null to indicate no summary available
-        return null;
+        return Task.FromResult<ConversationSummary?>(null);
     }
 
-    public async Task<List<string>> GetFollowUpSuggestionsAsync(Guid conversationId, int maxSuggestions = 5)
+    public Task<List<string>> GetFollowUpSuggestionsAsync(Guid conversationId, int maxSuggestions = 5)
     {
         // Return empty list for now
-        return new List<string>();
+        return Task.FromResult(new List<string>());
     }
 
     public async Task<ConversationExport> ExportConversationAsync(Guid conversationId, string format = "json")

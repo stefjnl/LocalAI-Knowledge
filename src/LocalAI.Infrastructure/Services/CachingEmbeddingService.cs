@@ -28,7 +28,7 @@ namespace LocalAI.Infrastructure.Services
         {
             var cacheKey = $"embedding_{(isQuery ? "query" : "doc")}_{text}";
             
-            if (_cache.TryGetValue(cacheKey, out float[] cachedEmbedding))
+            if (_cache.TryGetValue(cacheKey, out float[]? cachedEmbedding) && cachedEmbedding != null)
             {
                 _logger.LogDebug("Embedding retrieved from cache for text: {Text}", text.Substring(0, Math.Min(50, text.Length)));
                 return cachedEmbedding;
