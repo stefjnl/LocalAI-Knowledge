@@ -4,6 +4,7 @@ using LocalAI.Core.Models;
 using LocalAI.Infrastructure.Services;
 using LocalAI.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 
 namespace LocalAI.Api;
@@ -55,6 +56,10 @@ public class Program
             options.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
         });
 
+        // Add caching services
+        builder.Services.AddMemoryCache();
+        builder.Services.AddResponseCaching();
+
         // HTTP Client
         builder.Services.AddHttpClient();
 
@@ -74,9 +79,12 @@ public class Program
 
         // Your existing services (same as Console app)
         builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
+        builder.Services.Decorate<IEmbeddingService, CachingEmbeddingService>();
         builder.Services.AddScoped<IVectorSearchService, VectorSearchService>();
+        builder.Services.Decorate<IVectorSearchService, CachingVectorSearchService>();
         builder.Services.AddScoped<IDocumentProcessor, DocumentProcessor>();
         builder.Services.AddScoped<IRAGService, RAGService>();
+        builder.Services.Decorate<IRAGService, CachingRAGService>();
         builder.Services.AddScoped<IDisplayService, DisplayService>();
         builder.Services.AddScoped<LocalAI.Core.Interfaces.IConversationService, LocalAI.Infrastructure.Services.FileBasedConversationService>();
         builder.Services.AddScoped<LocalAI.Core.Interfaces.IConversationExportService, LocalAI.Infrastructure.Services.ConversationExportService>();
