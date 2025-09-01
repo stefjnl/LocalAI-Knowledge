@@ -10,392 +10,1152 @@
 
 <PageTitle>Document Management</PageTitle>
 
-<div class="container-fluid py-4">
-    <div class="row justify-content-center">
-        <div class="col-12">
-            <!-- Header -->
-            <div class="text-center mb-4">
-                <h1 class="display-5 fw-bold text-primary">📚 Document Management</h1>
-                <p class="lead text-muted">Organize and process your knowledge base documents</p>
-            </div>
+<!-- Header Navigation -->
+<div class="header-nav">
+    <div class="header-container">
+        <div class="logo">LocalAI Knowledge</div>
+        <nav class="nav-links">
+            <a href="/dashboard" class="nav-link">Dashboard</a>
+            <a href="/search" class="nav-link">Search</a>
+            <a href="/documents" class="nav-link active">Documents</a>
+            <a href="/export" class="nav-link">Export</a>
+            <a href="/settings" class="nav-link">Settings</a>
+            <a href="/debug" class="nav-link">Debug</a>
+        </nav>
+    </div>
+</div>
 
-            <!-- Processing Controls -->
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">⚙️ Processing Controls</h5>
-                    <span class="badge bg-light text-dark">@processedDocumentCount Documents Processed</span>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <button type="button" class="btn btn-primary" @onclick="ProcessAllDocuments" disabled="@isProcessing">
-                            @if (isProcessing && processingType == "all")
-                            {
-                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                <span>Processing All...</span>
-                            }
-                            else
-                            {
-                                <span>🚀 Process All Documents</span>
-                            }
-                        </button>
-                        <button type="button" class="btn btn-success" @onclick="ProcessNewDocuments" disabled="@isProcessing">
-                            @if (isProcessing && processingType == "new")
-                            {
-                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                <span>Processing New...</span>
-                            }
-                            else
-                            {
-                                <span>🆕 Process New Documents</span>
-                            }
-                        </button>
-                        <button type="button" class="btn btn-info" @onclick="RefreshData">
-                            <span>🔄 Refresh</span>
-                        </button>
-                    </div>
-                    <div class="alert alert-info mb-0" role="alert">
-                        <i class="bi bi-info-circle"></i> Process documents to make them searchable in your knowledge base
-                    </div>
-                </div>
-            </div>
+<!-- Hero Section -->
+<div class="hero-section">
+    <div class="hero-container">
+        <h1 class="hero-title">Document Management</h1>
+        <p class="hero-subtitle">Organize and process your knowledge base documents in smaller, lighter text.</p>
+    </div>
+</div>
 
-            <!-- Upload Section -->
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0">📤 Upload New Documents</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="documentType" class="form-label">Document Type</label>
-                            <select class="form-select" id="documentType" @bind="selectedDocumentType">
-                                <option value="transcript">Transcript (.txt)</option>
-                                <option value="pdf">PDF Document (.pdf)</option>
-                                <option value="webpage">Website URL</option>
-                            </select>
-                        </div>
-                        @if (selectedDocumentType == "webpage")
+<div class="container">
+    <div class="content-wrapper">
+        <!-- Processing Controls Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Processing Controls</h2>
+                <span class="badge badge-secondary">@processedDocumentCount Documents Processed</span>
+            </div>
+            <div class="card-body">
+                <div class="button-group">
+                    <button type="button" class="btn btn-primary" @onclick="ProcessAllDocuments" disabled="@isProcessing">
+                        @if (isProcessing && processingType == "all")
                         {
-                            <div class="col-md-6 mb-3">
-                                <label for="urlInput" class="form-label">Website URL</label>
-                                <input type="url" class="form-control" id="urlInput" @bind="selectedUrl"
-                                       placeholder="https://example.com/article" />
-                                <div class="form-text">Enter a complete URL to fetch and process webpage content</div>
-                            </div>
+                            <span class="spinner spinner-sm"></span>
+                            <span>Processing All...</span>
                         }
                         else
                         {
-                            <div class="col-md-6 mb-3">
-                                <label for="fileUpload" class="form-label">Select File</label>
-                                <InputFile id="fileUpload" class="form-control" accept=".txt,.pdf,.html,.htm" OnChange="OnFileSelected" />
-                            </div>
-                        }
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="urlInput" class="form-label">Or Enter URL</label>
-                            <input type="url" class="form-control" id="urlInput" placeholder="https://example.com/article" @bind="inputUrl" />
-                            <div class="form-text">Enter a URL to fetch and process web content</div>
-                        </div>
-                        <div class="col-md-6 mb-3 d-flex align-items-end">
-                            <button type="button" class="btn btn-success" @onclick="FetchUrl"
-                                disabled="@(isUploading || string.IsNullOrWhiteSpace(inputUrl))">
-                                @if (isUploading)
-                                {
-                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                    <span>Fetching...</span>
-                                }
-                                else
-                                {
-                                    <span>🌐 Fetch & Process URL</span>
-                                }
-                            </button>
-                        </div>
-                    </div>
-                    <button type="button" class="btn btn-success" @onclick="UploadDocument"
-                        disabled="@(isUploading || (selectedDocumentType != "webpage" && selectedFile == null) || (selectedDocumentType == "webpage" && string.IsNullOrWhiteSpace(selectedUrl)))">
-                        @if (isUploading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                            <span>Uploading...</span>
-                        }
-                        else
-                        {
-                            <span>📤 Upload and Process</span>
+                            <span>Process All Documents</span>
                         }
                     </button>
+                    <button type="button" class="btn btn-primary" @onclick="ProcessNewDocuments" disabled="@isProcessing">
+                        @if (isProcessing && processingType == "new")
+                        {
+                            <span class="spinner spinner-sm"></span>
+                            <span>Processing New...</span>
+                        }
+                        else
+                        {
+                            <span>Process New Documents</span>
+                        }
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="RefreshData">
+                        <span>Refresh</span>
+                    </button>
+                </div>
+                <div class="info-banner">
+                    <span class="info-icon">ℹ️</span>
+                    <span>Process documents to make them searchable.</span>
                 </div>
             </div>
+        </div>
 
-            <!-- Document Categories -->
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">📂 Document Categories</h5>
-                    <div class="d-flex align-items-center">
-                        <input type="text" class="form-control form-control-sm me-2" placeholder="Search documents..." @bind="searchTerm" />
-                        <span class="badge bg-light text-dark">@filteredDocumentCount/@processedDocumentCount Documents</span>
+        <!-- Upload Section Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Upload New Documents</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="documentType" class="form-label">Document Type</label>
+                        <select class="form-select" id="documentType" @bind="selectedDocumentType">
+                            <option value="transcript">Transcript (.txt)</option>
+                            <option value="pdf">PDF Document (.pdf)</option>
+                            <option value="webpage">Website URL</option>
+                        </select>
                     </div>
-                </div>
-                <div class="card-body">
-                    @if (isDataLoading)
+                    @if (selectedDocumentType == "webpage")
                     {
-                        <div class="text-center py-4">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <p class="mt-2">Loading document data...</p>
+                        <div class="form-group">
+                            <label for="urlInput" class="form-label">Website URL</label>
+                            <input type="url" class="form-control" id="urlInput" @bind="selectedUrl"
+                                   placeholder="https://example.com/article" />
+                            <div class="form-help">Enter a complete URL to fetch and process webpage content</div>
                         </div>
                     }
                     else
                     {
-                        <div class="accordion" id="documentCategories">
-                            @foreach (var category in documentCategories)
+                        <div class="form-group">
+                            <label for="fileUpload" class="form-label">Select File</label>
+                            <InputFile id="fileUpload" class="form-control" accept=".txt,.pdf,.html,.htm" OnChange="OnFileSelected" />
+                        </div>
+                    }
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="urlInput2" class="form-label">Or Enter URL</label>
+                        <input type="url" class="form-control" id="urlInput2" placeholder="https://example.com/article" @bind="inputUrl" />
+                        <div class="form-help">Enter a URL to fetch and process web content</div>
+                    </div>
+                    <div class="form-group align-end">
+                        <button type="button" class="btn btn-primary" @onclick="FetchUrl"
+                            disabled="@(isUploading || string.IsNullOrWhiteSpace(inputUrl))">
+                            @if (isUploading)
                             {
-                                var categoryDocuments = GetDocumentsForCategory(category.Key);
-                                var filteredCategoryDocuments = categoryDocuments.Where(d => string.IsNullOrEmpty(searchTerm) || 
-                                    d.FileName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
-                                
-                                if (filteredCategoryDocuments.Any() || string.IsNullOrEmpty(searchTerm))
-                                {
-                                    <div class="accordion-item">
-                                        <h2 class="accordion-header" id="heading-@category.Key">
-                                            <button class="accordion-button @(category.Key != "pdfs" ? "collapsed" : "")" 
-                                                    type="button" 
-                                                    data-bs-toggle="collapse" 
-                                                    data-bs-target="#collapse-@category.Key" 
-                                                    aria-expanded="@(category.Key == "pdfs" ? "true" : "false")" 
-                                                    aria-controls="collapse-@category.Key">
-                                                <div class="d-flex align-items-center">
-                                                    <span class="category-icon me-2">@category.Value.Icon</span>
-                                                    <span class="fw-bold">@category.Value.Name</span>
-                                                    <span class="badge bg-primary ms-2">@filteredCategoryDocuments.Count</span>
-                                                </div>
-                                            </button>
-                                        </h2>
-                                        <div id="collapse-@category.Key" class="accordion-collapse collapse @(category.Key == "pdfs" ? "show" : "")" 
-                                             aria-labelledby="heading-@category.Key" 
-                                             data-bs-parent="#documentCategories">
-                                            <div class="accordion-body">
-                                                @if (filteredCategoryDocuments.Any())
-                                                {
-                                                    <div class="table-responsive">
-                                                        <table class="table table-hover">
-                                                            <thead>
-                                                                <tr>
-                                                                    <th>Document</th>
-                                                                    <th>Chunks</th>
-                                                                    <th>Processed</th>
-                                                                    <th>Status</th>
-                                                                    <th>Actions</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                @foreach (var doc in filteredCategoryDocuments)
-                                                                {
-                                                                    <tr>
-                                                                        <td>
-                                                                            <div class="d-flex align-items-center">
-                                                                                <i class="bi bi-file-earmark-text me-2 text-primary"></i>
-                                                                                <div>
-                                                                                    <div class="fw-bold">@doc.FileName</div>
-                                                                                    <small class="text-muted">@GetFileSize(doc.FileName)</small>
-                                                                                </div>
-                                                                            </div>
-                                                                        </td>
-                                                                        <td>
-                                                                            <span class="badge bg-info">@doc.ChunksProcessed</span>
-                                                                        </td>
-                                                                        <td>
-                                                                            <small>@doc.ProcessedAt</small>
-                                                                        </td>
-                                                                        <td>
-                                                                            @if (doc.Success)
-                                                                            {
-                                                                                <span class="badge bg-success">Processed</span>
-                                                                            }
-                                                                            else
-                                                                            {
-                                                                                <span class="badge bg-danger" title="@doc.ErrorMessage">Failed</span>
-                                                                            }
-                                                                        </td>
-                                                                        <td>
-                                                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowDocumentDetails(doc)">
-                                                                                <i class="bi bi-info-circle"></i>
-                                                                            </button>
-                                                                            <button class="btn btn-sm btn-outline-warning ms-1" @onclick="() => ReprocessDocument(doc)" disabled="@isProcessing">
-                                                                                <i class="bi bi-arrow-repeat"></i>
-                                                                            </button>
-                                                                            <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteDocument(doc)" disabled="@isProcessing">
-                                                                                <i class="bi bi-trash"></i>
-                                                                            </button>
-                                                                        </td>
-                                                                    </tr>
-                                                                }
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                }
-                                                else
-                                                {
-                                                    <div class="text-center py-3">
-                                                        <i class="bi bi-folder text-muted" style="font-size: 2rem;"></i>
-                                                        <p class="mt-2 mb-0 text-muted">No documents found in this category</p>
-                                                    </div>
-                                                }
+                                <span class="spinner spinner-sm"></span>
+                                <span>Fetching...</span>
+                            }
+                            else
+                            {
+                                <span>Fetch & Process URL</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary" @onclick="UploadDocument"
+                    disabled="@(isUploading || (selectedDocumentType != "webpage" && selectedFile == null) || (selectedDocumentType == "webpage" && string.IsNullOrWhiteSpace(selectedUrl)))">
+                    @if (isUploading)
+                    {
+                        <span class="spinner spinner-sm"></span>
+                        <span>Uploading...</span>
+                    }
+                    else
+                    {
+                        <span>Upload and Process</span>
+                    }
+                </button>
+            </div>
+        </div>
+
+        <!-- Document Categories Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Document Categories</h2>
+                <div class="header-controls">
+                    <input type="text" class="search-input" placeholder="Search documents..." @bind="searchTerm" />
+                    <span class="badge badge-secondary">@filteredDocumentCount/@processedDocumentCount Documents</span>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (isDataLoading)
+                {
+                    <div class="loading-container">
+                        <div class="spinner"></div>
+                        <p>Loading document data...</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="accordion" id="documentCategories">
+                        @foreach (var category in documentCategories)
+                        {
+                            var categoryDocuments = GetDocumentsForCategory(category.Key);
+                            var filteredCategoryDocuments = categoryDocuments.Where(d => string.IsNullOrEmpty(searchTerm) || 
+                                d.FileName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+                            
+                            if (filteredCategoryDocuments.Any() || string.IsNullOrEmpty(searchTerm))
+                            {
+                                <div class="accordion-item">
+                                    <h3 class="accordion-header" id="heading-@category.Key">
+                                        <button class="accordion-button @((categoryExpanded.ContainsKey(category.Key) && categoryExpanded[category.Key]) ? "" : "collapsed")" 
+                                                type="button" 
+                                                @onclick="() => ToggleCategory(category.Key)"
+                                                data-bs-toggle="collapse" 
+                                                data-bs-target="#collapse-@category.Key" 
+                                                aria-expanded="@((categoryExpanded.ContainsKey(category.Key) && categoryExpanded[category.Key]).ToString().ToLower())" 
+                                                aria-controls="collapse-@category.Key">
+                                            <div class="category-header">
+                                                <span class="category-icon">@category.Value.Icon</span>
+                                                <span class="category-name">@category.Value.Name</span>
+                                                <span class="badge badge-primary">@filteredCategoryDocuments.Count</span>
                                             </div>
+                                        </button>
+                                    </h3>
+                                    <div id="collapse-@category.Key" class="accordion-collapse collapse @((categoryExpanded.ContainsKey(category.Key) && categoryExpanded[category.Key]) ? "show" : "")" 
+                                         aria-labelledby="heading-@category.Key" 
+                                         data-bs-parent="#documentCategories">
+                                        <div class="accordion-body">
+                                            @if (filteredCategoryDocuments.Any())
+                                            {
+                                                <div class="table-container">
+                                                    <table class="documents-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Document</th>
+                                                                <th>Chunks</th>
+                                                                <th>Processed</th>
+                                                                <th>Status</th>
+                                                                <th>Actions</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var doc in filteredCategoryDocuments)
+                                                            {
+                                                                <tr>
+                                                                    <td class="document-info">
+                                                                        <div class="document-icon">📄</div>
+                                                                        <div class="document-details">
+                                                                            <div class="document-name">@doc.FileName</div>
+                                                                            <div class="document-size">@GetFileSize(doc.FileName)</div>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="badge badge-info">@doc.ChunksProcessed</span>
+                                                                    </td>
+                                                                    <td class="processed-time">
+                                                                        @doc.ProcessedAt
+                                                                    </td>
+                                                                    <td>
+                                                                        @if (doc.Success)
+                                                                        {
+                                                                            <span class="badge badge-success">Processed</span>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <span class="badge badge-error" title="@doc.ErrorMessage">Failed</span>
+                                                                        }
+                                                                    </td>
+                                                                    <td class="actions">
+                                                                        <button class="icon-button" @onclick="() => ShowDocumentDetails(doc)" title="View">
+                                                                            <span class="icon">👁️</span>
+                                                                        </button>
+                                                                        <button class="icon-button" @onclick="() => ReprocessDocument(doc)" disabled="@isProcessing" title="Reprocess">
+                                                                            <span class="icon">🔄</span>
+                                                                        </button>
+                                                                        <button class="icon-button" @onclick="() => DeleteDocument(doc)" disabled="@isProcessing" title="Delete">
+                                                                            <span class="icon">🗑️</span>
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="empty-state">
+                                                    <div class="empty-icon">📁</div>
+                                                    <p class="empty-text">No documents found in this category</p>
+                                                </div>
+                                            }
                                         </div>
                                     </div>
-                                }
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Processing Progress -->
+        @if (isProcessing)
+        {
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Processing Progress</h2>
+                </div>
+                <div class="card-body">
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: @progressPercentage%"></div>
+                        </div>
+                        <div class="progress-text">@progressPercentage%</div>
+                    </div>
+                    <div class="progress-details">
+                        <p class="progress-message">@progressMessage</p>
+                        <p class="progress-subtext">@progressDetails</p>
+                    </div>
+                    @if (!string.IsNullOrEmpty(currentProcessingFile))
+                    {
+                        <div class="processing-file">
+                            <div class="file-info">
+                                <span>Processing file:</span>
+                                <span class="file-name">@currentProcessingFile</span>
+                            </div>
+                            @if (totalFilesToProcess > 0)
+                            {
+                                <div class="file-progress">
+                                    <span>Progress:</span>
+                                    <span>@currentFileIndex of @totalFilesToProcess files</span>
+                                </div>
                             }
                         </div>
                     }
                 </div>
             </div>
+        }
 
-            <!-- Processing Progress -->
-            @if (isProcessing)
-            {
-                <div class="card shadow-sm border-0 mb-4">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">🔄 Processing Progress</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="progress mb-3" style="height: 25px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
-                                style="width: @progressPercentage%" aria-valuenow="@progressPercentage" aria-valuemin="0"
-                                aria-valuemax="100">
-                                @progressPercentage%
-                            </div>
-                        </div>
-                        <div class="text-center">
-                            <p class="mb-1">@progressMessage</p>
-                            <small class="text-muted">@progressDetails</small>
-                        </div>
-                        @if (!string.IsNullOrEmpty(currentProcessingFile))
-                        {
-                            <div class="mt-3 p-3 bg-light rounded">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span>Processing file:</span>
-                                    <span class="fw-bold">@currentProcessingFile</span>
-                                </div>
-                                @if (totalFilesToProcess > 0)
-                                {
-                                    <div class="d-flex justify-content-between align-items-center mt-2">
-                                        <span>Progress:</span>
-                                        <span>@currentFileIndex of @totalFilesToProcess files</span>
-                                    </div>
-                                }
-                            </div>
-                        }
-                    </div>
+        <!-- Processing Complete -->
+        @if (processingComplete)
+        {
+            <div class="card success-card">
+                <div class="card-header">
+                    <h2 class="card-title">Processing Complete</h2>
                 </div>
-            }
-
-            <!-- Processing Complete -->
-            @if (processingComplete)
-            {
-                <div class="card shadow-sm border-0">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">✅ Processing Complete</h5>
-                    </div>
-                    <div class="card-body">
+                <div class="card-body">
+                    <div class="success-content">
+                        <div class="success-icon">✅</div>
                         <p>Successfully processed @processedChunks document chunks and stored them in the knowledge base.</p>
                         <p>Your knowledge base is now ready for semantic search!</p>
                         <a href="/search" class="btn btn-primary">Start Searching</a>
                     </div>
                 </div>
-            }
+            </div>
+        }
 
-            <!-- Document Details Modal -->
-            @if (selectedDocument != null)
-            {
-                <div class="modal fade show" style="display: block;" tabindex="-1">
-                    <div class="modal-dialog modal-lg">
-                        <div class="modal-content">
-                            <div class="modal-header bg-primary text-white">
-                                <h5 class="modal-title">📄 @selectedDocument.FileName</h5>
-                                <button type="button" class="btn-close btn-close-white" @onclick="CloseDocumentDetails"></button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h6>Document Information</h6>
-                                        <table class="table table-sm">
-                                            <tr>
-                                                <td><strong>Type:</strong></td>
-                                                <td>@selectedDocument.DocumentType</td>
-                                            </tr>
-                                            <tr>
-                                                <td><strong>Chunks Processed:</strong></td>
-                                                <td>@selectedDocument.ChunksProcessed</td>
-                                            </tr>
-                                            <tr>
-                                                <td><strong>Processing Time:</strong></td>
-                                                <td>@selectedDocument.ProcessingDuration</td>
-                                            </tr>
-                                            <tr>
-                                                <td><strong>Processed At:</strong></td>
-                                                <td>@selectedDocument.ProcessedAt</td>
-                                            </tr>
-                                            <tr>
-                                                <td><strong>Status:</strong></td>
-                                                <td>
-                                                    @if (selectedDocument.Success)
-                                                    {
-                                                        <span class="badge bg-success">Success</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="badge bg-danger">Failed</span>
-                                                    }
-                                                </td>
-                                            </tr>
-                                        </table>
+        <!-- Document Details Modal -->
+        @if (selectedDocument != null)
+        {
+            <div class="modal-overlay">
+                <div class="modal">
+                    <div class="modal-header">
+                        <h3 class="modal-title">📄 @selectedDocument.FileName</h3>
+                        <button type="button" class="modal-close" @onclick="CloseDocumentDetails">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="modal-content-grid">
+                            <div class="modal-section">
+                                <h4>Document Information</h4>
+                                <div class="info-grid">
+                                    <div class="info-item">
+                                        <span class="info-label">Type:</span>
+                                        <span class="info-value">@selectedDocument.DocumentType</span>
                                     </div>
-                                    <div class="col-md-6">
-                                        <h6>File Information</h6>
-                                        <table class="table table-sm">
-                                            <tr>
-                                                <td><strong>File Size:</strong></td>
-                                                <td>@GetFileSize(selectedDocument.FileName)</td>
-                                            </tr>
-                                            <tr>
-                                                <td><strong>File Path:</strong></td>
-                                                <td>@GetFilePath(selectedDocument.FileName)</td>
-                                            </tr>
-                                        </table>
+                                    <div class="info-item">
+                                        <span class="info-label">Chunks Processed:</span>
+                                        <span class="info-value">@selectedDocument.ChunksProcessed</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Processing Time:</span>
+                                        <span class="info-value">@selectedDocument.ProcessingDuration</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Processed At:</span>
+                                        <span class="info-value">@selectedDocument.ProcessedAt</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Status:</span>
+                                        <span class="info-value">
+                                            @if (selectedDocument.Success)
+                                            {
+                                                <span class="badge badge-success">Success</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-error">Failed</span>
+                                            }
+                                        </span>
                                     </div>
                                 </div>
-                                @if (!selectedDocument.Success && !string.IsNullOrEmpty(selectedDocument.ErrorMessage))
-                                {
-                                    <div class="alert alert-warning mt-3">
-                                        <h6>Error Details:</h6>
-                                        <p class="mb-0">@selectedDocument.ErrorMessage</p>
-                                    </div>
-                                }
                             </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" @onclick="CloseDocumentDetails">Close</button>
-                                <button type="button" class="btn btn-warning" @onclick="() => ReprocessDocument(selectedDocument)" disabled="@isProcessing">
-                                    @if (isProcessing && processingType == "reprocess")
-                                    {
-                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                        <span>Reprocessing...</span>
-                                    }
-                                    else
-                                    {
-                                        <span>🔄 Reprocess Document</span>
-                                    }
-                                </button>
+                            <div class="modal-section">
+                                <h4>File Information</h4>
+                                <div class="info-grid">
+                                    <div class="info-item">
+                                        <span class="info-label">File Size:</span>
+                                        <span class="info-value">@GetFileSize(selectedDocument.FileName)</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">File Path:</span>
+                                        <span class="info-value">@GetFilePath(selectedDocument.FileName)</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                        @if (!selectedDocument.Success && !string.IsNullOrEmpty(selectedDocument.ErrorMessage))
+                        {
+                            <div class="error-details">
+                                <h4>Error Details:</h4>
+                                <p>@selectedDocument.ErrorMessage</p>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseDocumentDetails">Close</button>
+                        <button type="button" class="btn btn-secondary" @onclick="() => ReprocessDocument(selectedDocument)" disabled="@isProcessing">
+                            @if (isProcessing && processingType == "reprocess")
+                            {
+                                <span class="spinner spinner-sm"></span>
+                                <span>Reprocessing...</span>
+                            }
+                            else
+                            {
+                                <span>Reprocess Document</span>
+                            }
+                        </button>
                     </div>
                 </div>
-                <div class="modal-backdrop fade show"></div>
-            }
-        </div>
+            </div>
+        }
     </div>
 </div>
+
+<style>
+    /* Tailscale-inspired Document Management UI */
+    :root {
+        --primary-bg: #1a1a1a;
+        --card-bg: #ffffff;
+        --text-primary: #111111;
+        --text-secondary: #666666;
+        --accent-blue: #007acc;
+        --success-green: #4ade80;
+        --warning-orange: #f59e0b;
+        --error-red: #ef4444;
+        --border-color: #e5e5e5;
+        --shadow: 0 4px 12px rgba(0,0,0,0.1);
+        --border-radius: 8px;
+        --spacing-sm: 8px;
+        --spacing-md: 16px;
+        --spacing-lg: 24px;
+        --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    }
+
+    /* Global Styles */
+    body {
+        font-family: var(--font-family);
+        background-color: var(--primary-bg);
+        color: var(--text-primary);
+        margin: 0;
+        padding: 0;
+        line-height: 1.5;
+    }
+
+    /* Header Navigation */
+    .header-nav {
+        background-color: #f9f9f9;
+        border-bottom: 1px solid var(--border-color);
+        padding: var(--spacing-sm) 0;
+    }
+
+    .header-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 var(--spacing-md);
+    }
+
+    .logo {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .nav-links {
+        display: flex;
+        gap: var(--spacing-md);
+    }
+
+    .nav-link {
+        text-decoration: none;
+        color: var(--text-secondary);
+        font-size: 14px;
+        font-weight: 500;
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius);
+        transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+        color: var(--accent-blue);
+        background-color: rgba(0, 122, 204, 0.1);
+    }
+
+    .nav-link.active {
+        color: var(--accent-blue);
+        background-color: rgba(0, 122, 204, 0.1);
+    }
+
+    /* Hero Section */
+    .hero-section {
+        background-color: #f9f9f9;
+        padding: var(--spacing-lg) 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .hero-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 var(--spacing-md);
+    }
+
+    .hero-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 var(--spacing-sm) 0;
+        color: var(--text-primary);
+    }
+
+    .hero-subtitle {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin: 0;
+        font-weight: 400;
+    }
+
+    /* Main Container */
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: var(--spacing-md);
+    }
+
+    .content-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-lg);
+    }
+
+    /* Cards */
+    .card {
+        background-color: var(--card-bg);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+    }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .card-title {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .card-body {
+        padding: var(--spacing-md);
+    }
+
+    /* Header Controls */
+    .header-controls {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-md);
+    }
+
+    .search-input {
+        padding: 8px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        width: 200px;
+    }
+
+    /* Buttons */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-primary {
+        background-color: var(--accent-blue);
+        color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background-color: #006bb3;
+    }
+
+    .btn-secondary {
+        background-color: transparent;
+        color: var(--accent-blue);
+        border: 1px solid var(--accent-blue);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background-color: rgba(0, 122, 204, 0.1);
+    }
+
+    .button-group {
+        display: flex;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-md);
+        flex-wrap: wrap;
+    }
+
+    /* Info Banner */
+    .info-banner {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        background-color: #f1f5f9;
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+
+    .info-icon {
+        font-size: 16px;
+    }
+
+    /* Forms */
+    .form-row {
+        display: flex;
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+        flex-wrap: wrap;
+    }
+
+    .form-group {
+        flex: 1;
+        min-width: 250px;
+    }
+
+    .align-end {
+        display: flex;
+        align-items: flex-end;
+    }
+
+    .form-label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 6px;
+        color: var(--text-primary);
+    }
+
+    .form-select,
+    .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        font-size: 14px;
+        font-family: var(--font-family);
+    }
+
+    .form-select:focus,
+    .form-control:focus {
+        outline: none;
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+    }
+
+    .form-help {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+    }
+
+    /* Badges */
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .badge-primary {
+        background-color: var(--accent-blue);
+        color: white;
+    }
+
+    .badge-secondary {
+        background-color: #e2e8f0;
+        color: var(--text-primary);
+    }
+
+    .badge-success {
+        background-color: var(--success-green);
+        color: white;
+    }
+
+    .badge-error {
+        background-color: var(--error-red);
+        color: white;
+    }
+
+    .badge-info {
+        background-color: var(--accent-blue);
+        color: white;
+    }
+
+    /* Accordion */
+    .accordion-item {
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .accordion-header {
+        margin: 0;
+    }
+
+    .accordion-button {
+        width: 100%;
+        padding: var(--spacing-md);
+        background-color: #f8fafc;
+        border: none;
+        text-align: left;
+        cursor: pointer;
+        border-radius: var(--border-radius);
+        transition: all 0.2s ease;
+    }
+
+    .accordion-button:not(.collapsed) {
+        background-color: #dbeafe;
+        border-radius: var(--border-radius) var(--border-radius) 0 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .category-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .category-icon {
+        font-size: 18px;
+    }
+
+    .category-name {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .accordion-body {
+        padding: var(--spacing-md);
+    }
+
+    /* Tables */
+    .table-container {
+        overflow-x: auto;
+    }
+
+    .documents-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    .documents-table th {
+        text-align: left;
+        padding: 12px;
+        border-bottom: 1px solid var(--border-color);
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .documents-table td {
+        padding: 12px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .document-info {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .document-icon {
+        font-size: 18px;
+    }
+
+    .document-details {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .document-name {
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .document-size {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .processed-time {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .actions {
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+
+    .icon-button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .icon-button:hover:not(:disabled) {
+        background-color: #f1f5f9;
+    }
+
+    .icon-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .icon {
+        font-size: 16px;
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: var(--spacing-lg);
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        margin-bottom: var(--spacing-sm);
+        color: var(--text-secondary);
+    }
+
+    .empty-text {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 14px;
+    }
+
+    /* Progress */
+    .progress-container {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .progress-bar {
+        flex: 1;
+        height: 12px;
+        background-color: #e2e8f0;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background-color: var(--accent-blue);
+        border-radius: 6px;
+        transition: width 0.3s ease;
+    }
+
+    .progress-text {
+        font-weight: 600;
+        min-width: 40px;
+        text-align: right;
+    }
+
+    .progress-details {
+        text-align: center;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .progress-message {
+        font-weight: 500;
+        margin: 0 0 4px 0;
+    }
+
+    .progress-subtext {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin: 0;
+    }
+
+    .processing-file {
+        padding: var(--spacing-md);
+        background-color: #f1f5f9;
+        border-radius: var(--border-radius);
+    }
+
+    .file-info,
+    .file-progress {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .file-info:last-child,
+    .file-progress:last-child {
+        margin-bottom: 0;
+    }
+
+    .file-name {
+        font-weight: 600;
+    }
+
+    /* Success Card */
+    .success-card {
+        border: 1px solid var(--success-green);
+    }
+
+    .success-content {
+        text-align: center;
+        padding: var(--spacing-lg);
+    }
+
+    .success-icon {
+        font-size: 48px;
+        margin-bottom: var(--spacing-md);
+    }
+
+    /* Modal */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: var(--spacing-md);
+    }
+
+    .modal {
+        background-color: var(--card-bg);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        max-width: 800px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-title {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    }
+
+    .modal-close:hover {
+        background-color: #f1f5f9;
+    }
+
+    .modal-body {
+        padding: var(--spacing-md);
+    }
+
+    .modal-content-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--spacing-lg);
+    }
+
+    @@media (max-width: 768px) {
+        .modal-content-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .modal-section h4 {
+        margin-top: 0;
+        margin-bottom: var(--spacing-md);
+        color: var(--text-primary);
+        font-size: 16px;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--spacing-sm);
+    }
+
+    .info-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .info-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 2px;
+    }
+
+    .info-value {
+        font-size: 14px;
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .error-details {
+        margin-top: var(--spacing-lg);
+        padding: var(--spacing-md);
+        background-color: #fef2f2;
+        border-radius: var(--border-radius);
+        border-left: 3px solid var(--error-red);
+    }
+
+    .error-details h4 {
+        margin-top: 0;
+        color: var(--text-primary);
+    }
+
+    .error-details p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 14px;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-md);
+        border-top: 1px solid var(--border-color);
+    }
+
+    /* Loading */
+    .loading-container {
+        text-align: center;
+        padding: var(--spacing-lg);
+    }
+
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(0, 122, 204, 0.2);
+        border-top: 3px solid var(--accent-blue);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto var(--spacing-sm);
+    }
+
+    .spinner-sm {
+        width: 16px;
+        height: 16px;
+        border-width: 2px;
+        margin: 0;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @@media (max-width: 768px) {
+        .header-container {
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .nav-links {
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .card-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: var(--spacing-sm);
+        }
+
+        .header-controls {
+            width: 100%;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .search-input {
+            width: 100%;
+        }
+
+        .form-row {
+            flex-direction: column;
+        }
+
+        .form-group {
+            min-width: auto;
+        }
+
+        .button-group {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+        }
+
+        .actions {
+            flex-wrap: wrap;
+        }
+    }
+</style>
 
 @code {
     private bool isProcessing = false;
@@ -423,14 +1183,13 @@
     private List<ProcessedDocumentInfo> allProcessedDocuments = new();
     private ProcessedDocumentInfo? selectedDocument;
 
+    // Track expanded state of categories
+    private Dictionary<string, bool> categoryExpanded = new();
+
     // Document categories with icons and names
     private Dictionary<string, (string Name, string Icon)> documentCategories = new()
     {
         { "pdfs", ("PDF Documents", "📚") },
-        { "pdfs/azure", ("Azure", "☁️") },
-        { "pdfs/devops", ("DevOps", "🔧") },
-        { "pdfs/dotnet", (".NET", "🔷") },
-        { "pdfs/llms", ("LLMs", "🤖") },
         { "transcripts", ("Transcripts", "📝") },
         { "webpages", ("Web Pages", "🌐") }
     };
@@ -444,6 +1203,11 @@
     protected override async Task OnInitializedAsync()
     {
         Logger.LogInformation("Documents page initialized");
+        // Initialize category expanded state
+        foreach (var category in documentCategories.Keys)
+        {
+            categoryExpanded[category] = false;
+        }
         await LoadProcessingData();
     }
 
@@ -478,13 +1242,9 @@
     {
         if (category == "pdfs")
         {
-            // Return all PDFs that are not in subcategories
+            // Return all PDF documents
             return allProcessedDocuments
-                .Where(d => d.DocumentType == "PDF" &&
-                           !d.FileName.Contains("azure") &&
-                           !d.FileName.Contains("devops") &&
-                           !d.FileName.Contains("dotnet") &&
-                           !d.FileName.Contains("llms"))
+                .Where(d => d.DocumentType == "PDF")
                 .ToList();
         }
 
@@ -502,11 +1262,8 @@
                 .ToList();
         }
 
-        // Handle subcategories (azure, devops, etc.)
-        return allProcessedDocuments
-            .Where(d => d.DocumentType == "PDF" &&
-                       d.FileName.Contains(category.Replace("pdfs/", "")))
-            .ToList();
+        // Return empty list for any other categories
+        return new List<ProcessedDocumentInfo>();
     }
 
     private async Task ProcessAllDocuments()
@@ -846,6 +1603,20 @@
         await LoadProcessingData();
     }
 
+    private void ToggleCategory(string categoryKey)
+    {
+        // Toggle the expanded state for this category
+        if (categoryExpanded.ContainsKey(categoryKey))
+        {
+            categoryExpanded[categoryKey] = !categoryExpanded[categoryKey];
+        }
+        else
+        {
+            categoryExpanded[categoryKey] = true;
+        }
+        StateHasChanged();
+    }
+
     private void ShowDocumentDetails(ProcessedDocumentInfo document)
     {
         selectedDocument = document;
@@ -900,18 +1671,13 @@
 
     private string GetFilePath(string fileName)
     {
-        // Determine the file path based on the document type and name
-        if (fileName.Contains("azure"))
-            return $"data/pdfs/azure/{fileName}";
-        if (fileName.Contains("devops"))
-            return $"data/pdfs/devops/{fileName}";
-        if (fileName.Contains("dotnet"))
-            return $"data/pdfs/dotnet/{fileName}";
-        if (fileName.Contains("llms"))
-            return $"data/pdfs/llms/{fileName}";
+        // Determine the file path based on the document type
         if (fileName.EndsWith(".txt"))
             return $"data/transcripts/{fileName}";
+        if (fileName.EndsWith(".pdf"))
+            return $"data/pdfs/{fileName}";
         
-        return $"data/pdfs/{fileName}";
+        // For web pages and other types
+        return $"data/webpages/{fileName}";
     }
 }
