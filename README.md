@@ -4,12 +4,15 @@ A comprehensive personal AI knowledge assistant that transforms accumulated digi
 
 ## 🎯 Project Vision
 
-Build a NotebookLM-style experience that:
+A NotebookLM-style experience that:
 - **Processes multiple document types** (PDFs, transcripts, notes) into searchable knowledge
 - **Uses local AI models** for complete privacy (no cloud dependencies)
 - **Provides RAG-enhanced responses** that synthesize information across sources
 - **Maintains source attribution** with page numbers and relevance scores
 - **Scales to large knowledge bases** (1000+ documents, multiple GBs)
+
+  
+![LocalAIKnowledge](https://github.com/user-attachments/assets/53ec56eb-6418-4daa-b454-be64da113d88)
 
 ## 🏗️ Architecture Overview
 
@@ -27,8 +30,6 @@ Build a NotebookLM-style experience that:
 │  (Blazor)         │    │  (Qdrant, etc.)   │    │ Services          │
 └───────────────────┘    └───────────────────┘    └───────────────────┘
 ```
-
-**Dependencies flow inward**: All outer layers depend on inner layers, not vice versa
 
 ### Core Components
 
